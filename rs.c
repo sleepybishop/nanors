@@ -21,8 +21,9 @@ static void axpy(u8 *a, u8 *b, u8 u, int k) {
       a[i] = a[i] ^ b[i];
   } else {
     register u8 *u_row = &GF2_8_MUL[u << 8];
-    for (int i = 0; i < k; i++)
-      a[i] = a[i] ^ u_row[b[i]];
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap != ae; ap++, bp++)
+      *ap ^= u_row[*bp];
   }
 }
 
@@ -30,14 +31,15 @@ static void scal(u8 *a, u8 u, int k) {
   if (u < 2)
     return;
   register u8 *u_row = &GF2_8_MUL[u << 8];
-  for (int i = 0; i < k; i++)
-    a[i] = u_row[a[i]];
+  register u8 *ap = a, *ae = &a[k];
+  for (; ap != ae; ap++)
+    *ap = u_row[*ap];
 }
 
 static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m) {
   int ci = 0;
   for (int row = 0; row < n; row++, ci++) {
-    register u8 *ap = a + (row * k);
+    u8 *ap = a + (row * k);
     memset(c[ci], 0, m);
     for (int idx = 0; idx < k; idx++)
       axpy(c[ci], b[idx], ap[idx], m);
