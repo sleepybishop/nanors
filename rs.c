@@ -75,17 +75,13 @@ reed_solomon *reed_solomon_new(int ds, int ps) {
   reed_solomon *rs = NULL;
   if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0 || ps > ds)
     return NULL;
-  rs = calloc(1, sizeof(reed_solomon));
+  rs = calloc(1, sizeof(reed_solomon) + 3 * ps * ds);
   if (!rs)
     return NULL;
   rs->ds = ds;
   rs->ps = ps;
   rs->ts = ds + ps;
-  rs->p = (u8 *)calloc(rs->ds, rs->ps);
-  if (!rs->p) {
-    free(rs);
-    return NULL;
-  }
+
   for (int j = 0; j < rs->ps; j++) {
     u8 *row = rs->p + j * rs->ds;
     for (int i = 0; i < rs->ds; i++)
@@ -95,11 +91,8 @@ reed_solomon *reed_solomon_new(int ds, int ps) {
 }
 
 void reed_solomon_release(reed_solomon *rs) {
-  if (!rs)
-    return;
-  if (rs->p)
-    free(rs->p);
-  free(rs);
+  if (rs)
+    free(rs);
 }
 
 int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards,
