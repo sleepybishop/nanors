@@ -17,27 +17,39 @@ double now(time_t epoch) {
 }
 
 typedef reed_solomon rs_t;
+void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K) {
+  for (int i = 0; i < 2 * K; i++) {
+    free(buf[i]);
+    free(cmp[i]);
+  }
+  free(buf);
+  free(cmp);
+  free(marks);
+}
 
 int run(int seed, int K, int N, int T, double *et, double *dt) {
   uint8_t **buf = calloc(2 * K, T * sizeof(uint8_t *));
+  uint8_t **cmp = calloc(2 * K, T * sizeof(uint8_t *));
   uint8_t *marks = calloc(1, 2 * K);
   int ret = 0;
 
   for (int i = 0; i < 2 * K; i++) {
     buf[i] = calloc(1, T);
+    cmp[i] = calloc(1, T);
   }
 
   for (int i = 0; i < K; i++) {
     for (int j = 0; j < T; j++) {
       buf[i][j] = MAP(rand(), RAND_MAX, 0, 256);
+      cmp[i][j] = buf[i][j];
     }
   }
 
   reed_solomon_init();
   rs_t *rs = reed_solomon_new(K, N);
   if (!rs) {
-    free(buf);
-    free(marks);
+    cleanup(buf, cmp, marks, K);
+    printf("failed to init codec\n");
     return -1;
   }
 
@@ -60,12 +72,19 @@ int run(int seed, int K, int N, int T, double *et, double *dt) {
   *dt += now(0) - t0;
   reed_solomon_release(rs);
 
-  for (int i = 0; i < 2 * K; i++) {
-    free(buf[i]);
+  int failed = 0;
+  for (int i = 0; i < K; i++) {
+    for (int j = 0; j < T; j++) {
+      if (cmp[i][j] != buf[i][j]) {
+        printf("mismatch at row %d col %d\n", i, j);
+        failed = 1;
+        break;
+      }
+    }
   }
+  assert(failed == 0);
 
-  free(buf);
-  free(marks);
+  cleanup(buf, cmp, marks, K);
   return ret;
 }
 
