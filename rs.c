@@ -62,7 +62,6 @@ static int invert_mat(u8 *src, u8 **dst, int V0, int K, int T, int *c) {
   for (int x = W - 1; x >= 0; x--) {
     for (int row = 0; row < x; row++) {
       u = src[row * W + x];
-      axpy(src + row * W, src + x * W, u, W);
       axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
     }
   }
