@@ -35,33 +35,34 @@ static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m) {
   }
 }
 
-static int invert_mat(u8 *src, u8 **dst, int V0, int K, int T, int *c) {
+static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T,
+                      int *c) {
   int V0b = V0, W = K - V0;
   u8 u = 0;
   for (int i = 0; i < W; i++) {
     for (int j = 0; j < W; j++) {
-      src[i * W + j] = src[(V0 + i) * K + c[V0 + j]];
+      wrk[i * W + j] = src[i * K + c[V0 + j]];
     }
   }
   for (; V0 < K; V0++) {
     for (int row = 0; row < V0b; row++) {
-      u = src[V0 * K + c[row]];
+      u = src[(V0 - V0b) * K + c[row]];
       axpy(dst[c[V0]], dst[c[row]], u, T);
     }
   }
   for (int x = 0; x < W; x++) {
-    u = GF2_8_INV[src[x * W + x]];
-    scal(src + x * W + x, u, W);
+    u = GF2_8_INV[wrk[x * W + x]];
+    scal(wrk + x * W + x, u, W);
     scal(dst[c[V0b + x]], u, T);
     for (int row = x + 1; row < W; row++) {
-      u = src[row * W + x];
-      axpy(src + row * W, src + x * W, u, W);
+      u = wrk[row * W + x];
+      axpy(wrk + row * W, wrk + x * W, u, W);
       axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
     }
   }
   for (int x = W - 1; x >= 0; x--) {
     for (int row = 0; row < x; row++) {
-      u = src[row * W + x];
+      u = wrk[row * W + x];
       axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
     }
   }
@@ -99,26 +100,22 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards,
   if (nr_shards < rs->ts)
     return -1;
 
-  u8 src[DATA_SHARDS_MAX * DATA_SHARDS_MAX];
-  int erased_blocks[DATA_SHARDS_MAX], colperm[DATA_SHARDS_MAX], gaps = 0;
-  memset(src, 0, rs->ds * rs->ds);
+  u8 *src = rs->p + 1 * rs->ps * rs->ds, *wrk = rs->p + 2 * rs->ps * rs->ds;
+  int erasures[DATA_SHARDS_MAX], colperm[DATA_SHARDS_MAX], gaps = 0;
 
-  for (int i = 0; i < rs->ds; i++) {
+  for (int i = 0; i < rs->ds; i++)
     if (marks[i])
-      erased_blocks[gaps++] = i;
-  }
+      erasures[gaps++] = i;
   for (int i = 0, j = 0; i < rs->ds - gaps; i++, j++) {
     while (marks[j])
       j++;
     colperm[i] = j;
   }
   for (int i = 0, j = rs->ds - gaps; i < gaps; i++, j++)
-    colperm[j] = erased_blocks[i];
-  for (int i = 0; i < rs->ds - gaps; i++)
-    src[i * rs->ds + colperm[i]] = 1;
+    colperm[j] = erasures[i];
 
-  int i = rs->ds - gaps;
-  for (int j = rs->ds, g = 0, l = 0; i < rs->ds; i++, j++, l++) {
+  int i = 0;
+  for (int j = rs->ds, g = 0, l = 0; i < gaps; i++, j++, l++) {
     while (marks[j]) {
       j++;
       l++;
@@ -126,11 +123,12 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards,
     if (j >= nr_shards)
       break;
     memcpy(src + i * rs->ds, rs->p + l * rs->ds, rs->ds);
-    memcpy(data[erased_blocks[g++]], data[j], bs);
+    memcpy(data[erasures[g++]], data[j], bs);
   }
-  if (i < rs->ds)
+  if (i < gaps)
     return -1;
-  invert_mat(src, data, rs->ds - gaps, rs->ds, bs, colperm);
+
+  invert_mat(src, wrk, data, rs->ds - gaps, rs->ds, bs, colperm);
   return 0;
 }
 

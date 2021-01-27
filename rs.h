@@ -9,7 +9,7 @@ typedef struct _reed_solomon {
   int ds;
   int ps;
   int ts;
-  uint8_t *p;
+  uint8_t p[];
 } reed_solomon;
 
 //#define reed_solomon_init()
