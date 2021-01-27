@@ -47,27 +47,35 @@ static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m) {
 }
 
 static int invert_mat(u8 *src, u8 **dst, int V0, int K, int T, int *c) {
-  int V0b = V0;
+  int V0b = V0, W = K - V0;
   u8 u = 0;
-  while (V0 < K) {
-    for (int row = 0; row < V0; row++) {
+  for (int i = 0; i < W; i++) {
+    for (int j = 0; j < W; j++) {
+      src[i * W + j] = src[(V0 + i) * K + c[V0 + j]];
+    }
+  }
+  for (; V0 < K; V0++) {
+    for (int row = 0; row < V0b; row++) {
       u = src[V0 * K + c[row]];
-      axpy(src + V0 * K, src + row * K, u, K);
       axpy(dst[c[V0]], dst[c[row]], u, T);
     }
-    u = GF2_8_INV[src[V0 * K + c[V0]]];
-    scal(src + V0 * K, u, K);
-    scal(dst[c[V0]], u, T);
-    V0++;
   }
-  V0--;
-  while (V0 >= V0b) {
-    for (int row = V0b; row < V0; row++) {
-      u = src[row * K + c[V0]];
-      axpy(src + row * K, src + V0 * K, u, K);
-      axpy(dst[c[row]], dst[c[V0]], u, T);
+  for (int x = 0; x < W; x++) {
+    u = GF2_8_INV[src[x * W + x]];
+    scal(src + x * W + x, u, W);
+    scal(dst[c[V0b + x]], u, T);
+    for (int row = x + 1; row < W; row++) {
+      u = src[row * W + x];
+      axpy(src + row * W, src + x * W, u, W);
+      axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
     }
-    V0--;
+  }
+  for (int x = W - 1; x >= 0; x--) {
+    for (int row = 0; row < x; row++) {
+      u = src[row * W + x];
+      axpy(src + row * W, src + x * W, u, W);
+      axpy(dst[c[V0b + row]], dst[c[V0b + x]], u, T);
+    }
   }
   return 0;
 }
