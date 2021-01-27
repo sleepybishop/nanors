@@ -1,4 +1,4 @@
-OBJ=rs.o
+OBJ=oblas_lite.o rs.o
 
 CPPFLAGS = -D_DEFAULT_SOURCE
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -fno-inline -Wvla

@@ -4,13 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "oblas_lite.h"
 #include "rs.h"
-
-#include "gf2_8_tables.h"
-
-typedef uint8_t u8;
-
-u8 GF2_8_MUL[256 * 256];
 
 static void axpy(u8 *a, u8 *b, u8 u, int k) {
   if (u == 0)
@@ -20,20 +15,14 @@ static void axpy(u8 *a, u8 *b, u8 u, int k) {
     for (int i = 0; i < k; i++)
       a[i] = a[i] ^ b[i];
   } else {
-    register u8 *u_row = &GF2_8_MUL[u << 8];
-    register u8 *ap = a, *ae = &a[k], *bp = b;
-    for (; ap != ae; ap++, bp++)
-      *ap ^= u_row[*bp];
+    obl_axpy(a, b, u, k);
   }
 }
 
 static void scal(u8 *a, u8 u, int k) {
   if (u < 2)
     return;
-  register u8 *u_row = &GF2_8_MUL[u << 8];
-  register u8 *ap = a, *ae = &a[k];
-  for (; ap != ae; ap++)
-    *ap = u_row[*ap];
+  obl_scal(a, u, k);
 }
 
 static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m) {
@@ -80,16 +69,7 @@ static int invert_mat(u8 *src, u8 **dst, int V0, int K, int T, int *c) {
   return 0;
 }
 
-void reed_solomon_init() {
-  for (int i = 0; i < 256; i++) {
-    for (int j = 0; j < 256; j++) {
-      if (i == 0 || j == 0)
-        GF2_8_MUL[256 * i + j] = 0;
-      else
-        GF2_8_MUL[256 * i + j] = GF2_8_EXP[GF2_8_LOG[i] + GF2_8_LOG[j]];
-    }
-  }
-}
+void reed_solomon_init() { obl_fill_mul_tab(); }
 
 reed_solomon *reed_solomon_new(int ds, int ps) {
   reed_solomon *rs = NULL;
