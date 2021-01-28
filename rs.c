@@ -12,8 +12,9 @@ static void axpy(u8 *a, u8 *b, u8 u, int k) {
     return;
 
   if (u == 1) {
-    for (int i = 0; i < k; i++)
-      a[i] = a[i] ^ b[i];
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap < ae; ap++, bp++)
+      *ap ^= *bp;
   } else {
     obl_axpy(a, b, u, k);
   }
