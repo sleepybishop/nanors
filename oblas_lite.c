@@ -27,6 +27,36 @@ static void obl_scal_ref(u8 *a, u8 *b, u8 u, int k) {
     *ap = u_row[*ap];
 }
 
+#if defined(__AVX512F__)
+#include <immintrin.h>
+
+#define OBL_SHUF(op, a, b, f)                                                  \
+  do {                                                                         \
+    const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                   \
+    const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                   \
+    const __m512i mask = _mm512_set1_epi8(0x0f);                               \
+    const __m128i ulo_128 = _mm_loadu_si128((__m128i *)u_lo);                  \
+    const __m128i uhi_128 = _mm_loadu_si128((__m128i *)u_hi);                  \
+    const __m512i urow_lo = _mm512_broadcast_i32x4(ulo_128);                   \
+    const __m512i urow_hi = _mm512_broadcast_i32x4(uhi_128);                   \
+    __m512i *ap = (__m512i *)a,                                                \
+            *ae = (__m512i *)(a + k - (k % sizeof(__m256i))),                  \
+            *bp = (__m512i *)b;                                                \
+    for (; ap < ae; ap++, bp++) {                                              \
+      __m512i bx = _mm512_loadu_si512(bp);                                     \
+      __m512i lo = _mm512_and_si512(bx, mask);                                 \
+      bx = _mm512_srli_epi64(bx, 4);                                           \
+      __m512i hi = _mm512_and_si512(bx, mask);                                 \
+      lo = _mm512_shuffle_epi8(urow_lo, lo);                                   \
+      hi = _mm512_shuffle_epi8(urow_hi, hi);                                   \
+      _mm512_storeu_si512(                                                     \
+          ap, f(_mm512_loadu_si512(ap), _mm512_xor_si512(lo, hi)));            \
+    }                                                                          \
+    op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m512i));                      \
+  } while (0)
+#define OBL_SHUF_XOR _mm512_xor_si512
+
+#else
 #if defined(__AVX2__)
 #include <immintrin.h>
 
@@ -116,6 +146,7 @@ static void obl_scal_ref(u8 *a, u8 *b, u8 u, int k) {
     op##_ref(a, b, u, k);                                                      \
   } while (0)
 #define OBL_SHUF_XOR
+#endif
 #endif
 #endif
 #endif
