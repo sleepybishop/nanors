@@ -1,4 +1,4 @@
-# nanors
+# nanors [![CI](https://github.com/sleepybishop/nanors/actions/workflows/ci.yml/badge.svg)](https://github.com/sleepybishop/nanors/actions/workflows/ci.yml)
 
 nanors is a tiny, performant implementation of reed solomon codes capable of reaching multi-gigabit speeds on a single core.
 
