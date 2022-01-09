@@ -6,7 +6,7 @@ It was designed to be compatible with the reed solomon scheme used in NVIDIA Gam
 
 ## Performance
 
-Good performance is dependent on CPU acceleration, to this end a stripped down and amalgamated version of https://github.com/sleepybishop/oblas is included. Automatic detection of CPU capabilities is attempted via compiler macro defines.
+Good performance is dependent on CPU acceleration, to this end a stripped down and amalgamated version of https://github.com/sleepybishop/oblas is included.
 
 ## Benchmark
 
