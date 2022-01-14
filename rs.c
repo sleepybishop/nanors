@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "oblas_lite.h"
+#include "oblas_lite.c"
 #include "rs.h"
 
 static void axpy(u8 *a, u8 *b, u8 u, int k)
