@@ -4,7 +4,8 @@ TEST_UTILS=\
 t/00util/test\
 t/00util/bench
 
-CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl -fno-inline -Wvla
+#CPPFLAGS=-DOBLAS_AVX2
+CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize 
 
 all: rs.o
@@ -27,7 +28,11 @@ indent:
 	find -name '*.[h,c]' | xargs clang-format -i
 
 scan: 
-	scan-build $(MAKE) clean $(OBJ) $(TEST_UTILS)
+	scan-build --status-bugs $(MAKE) clean $(OBJ) $(TEST_UTILS)
+
+valgrind: CFLAGS = -O0 -g -std=c11 -Wall -I. -Ideps/obl
+valgrind: clean $(TEST_UTILS)
+	valgrind --error-exitcode=2 ./t/00util/bench 200 20 512
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
 gperf: clean t/00util/bench
