@@ -75,7 +75,7 @@ static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T, int *c, 
     return 0;
 }
 
-void reed_solomon_init()
+void reed_solomon_init(void)
 {
 }
 
