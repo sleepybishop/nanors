@@ -111,8 +111,8 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
         return -1;
 
     u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
-    u8 erasures[DATA_SHARDS_MAX], colperm[DATA_SHARDS_MAX];
-    u8 gaps = 0, rowperm[DATA_SHARDS_MAX];
+    u8 erasures[rs->ds], colperm[rs->ds];
+    u8 gaps = 0, rowperm[rs->ds];
 
     for (int i = 0; i < rs->ds; i++)
         if (marks[i])
