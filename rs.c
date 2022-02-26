@@ -39,7 +39,7 @@ static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m)
     }
 }
 
-static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T, int *c, int *d)
+static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T, u8 *c, u8 *d)
 {
     int V0b = V0, W = K - V0;
     u8 u = 0;
@@ -111,8 +111,8 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
         return -1;
 
     u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
-    int erasures[DATA_SHARDS_MAX], colperm[DATA_SHARDS_MAX];
-    int gaps = 0, rowperm[DATA_SHARDS_MAX];
+    u8 erasures[rs->ds], colperm[rs->ds];
+    u8 gaps = 0, rowperm[rs->ds];
 
     for (int i = 0; i < rs->ds; i++)
         if (marks[i])
