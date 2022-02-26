@@ -7,13 +7,14 @@ use Digest::MD5 qw(md5_hex);
 use Data::Dumper;
 
 sub run_test {
-    return run_prog("./t/00util/test");
+    my $seed = shift;
+    return run_prog("./t/00util/test $seed");
 }
 
 subtest "random schemes" => sub {
-    my ($idx, $iters) = (0, 200);
+    my ($idx, $iters) = (0, 2000);
     while ($idx < $iters) {
-        my $resp = run_test($_);
+        my $resp = run_test($idx);
         like $resp, "/===OK===/", "iter $idx";
         $idx++;
     }
