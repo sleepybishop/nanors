@@ -82,7 +82,7 @@ void reed_solomon_init(void)
 reed_solomon *reed_solomon_new(int ds, int ps)
 {
     reed_solomon *rs = NULL;
-    if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0 || ps > ds)
+    if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0)
         return NULL;
     rs = calloc(1, sizeof(reed_solomon) + 2 * ps * ds);
     if (!rs)

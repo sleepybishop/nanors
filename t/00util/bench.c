@@ -18,9 +18,9 @@ double now(time_t epoch)
 }
 
 typedef reed_solomon rs_t;
-void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K)
+void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K, int N)
 {
-    for (int i = 0; i < 2 * K; i++) {
+    for (int i = 0; i < K + N; i++) {
         free(buf[i]);
         free(cmp[i]);
     }
@@ -31,12 +31,12 @@ void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K)
 
 int run(int seed, int K, int N, int T, double *et, double *dt)
 {
-    uint8_t **buf = calloc(2 * K, T * sizeof(uint8_t *));
-    uint8_t **cmp = calloc(2 * K, T * sizeof(uint8_t *));
-    uint8_t *marks = calloc(1, 2 * K);
+    uint8_t **buf = calloc(K + N, T * sizeof(uint8_t *));
+    uint8_t **cmp = calloc(K + N, T * sizeof(uint8_t *));
+    uint8_t *marks = calloc(1, K + N);
     int ret = 0;
 
-    for (int i = 0; i < 2 * K; i++) {
+    for (int i = 0; i < K + N; i++) {
         buf[i] = calloc(1, T);
         cmp[i] = calloc(1, T);
     }
@@ -51,7 +51,7 @@ int run(int seed, int K, int N, int T, double *et, double *dt)
     reed_solomon_init();
     rs_t *rs = reed_solomon_new(K, N);
     if (!rs) {
-        cleanup(buf, cmp, marks, K);
+        cleanup(buf, cmp, marks, K, N);
         printf("failed to init codec\n");
         return -1;
     }
@@ -87,7 +87,7 @@ int run(int seed, int K, int N, int T, double *et, double *dt)
     }
     assert(failed == 0);
 
-    cleanup(buf, cmp, marks, K);
+    cleanup(buf, cmp, marks, K, N);
     return ret;
 }
 
