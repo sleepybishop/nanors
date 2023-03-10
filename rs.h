@@ -12,10 +12,11 @@ typedef struct _reed_solomon {
     uint8_t p[];
 } reed_solomon;
 
-//#define reed_solomon_init()
+#define reed_solomon_bufsize(ds, ps) (sizeof(reed_solomon) + 2 * (ps) * (ds))
 #define reed_solomon_reconstruct reed_solomon_decode
 
 void reed_solomon_init(void);
+reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps);
 reed_solomon *reed_solomon_new(int data_shards, int parity_shards);
 void reed_solomon_release(reed_solomon *rs);
 
