@@ -79,14 +79,18 @@ void reed_solomon_init(void)
 {
 }
 
-reed_solomon *reed_solomon_new(int ds, int ps)
+reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
 {
-    reed_solomon *rs = NULL;
+    reed_solomon *rs = buf;
+
     if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0)
         return NULL;
-    rs = calloc(1, sizeof(reed_solomon) + 2 * ps * ds);
-    if (!rs)
+
+    if (len < reed_solomon_bufsize(ds, ps))
         return NULL;
+
+    memset(buf, 0, len);
+
     rs->ds = ds;
     rs->ps = ps;
     rs->ts = ds + ps;
@@ -96,7 +100,23 @@ reed_solomon *reed_solomon_new(int ds, int ps)
         for (int i = 0; i < rs->ds; i++)
             row[i] = GF2_8_INV[(rs->ps + i) ^ j];
     }
+
     return rs;
+}
+
+reed_solomon *reed_solomon_new(int ds, int ps)
+{
+    size_t len = reed_solomon_bufsize(ds, ps);
+    void *buf = malloc(len);
+    if (!buf)
+        return NULL;
+
+    if (reed_solomon_new_static(buf, len, ds, ps) == NULL) {
+        free(buf);
+        return NULL;
+    }
+
+    return buf;
 }
 
 void reed_solomon_release(reed_solomon *rs)
