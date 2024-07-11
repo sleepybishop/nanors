@@ -73,7 +73,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
         const __m128i uhi_128 = _mm_loadu_si128((__m128i *)u_hi);                                                                  \
         const __m512i urow_lo = _mm512_broadcast_i32x4(ulo_128);                                                                   \
         const __m512i urow_hi = _mm512_broadcast_i32x4(uhi_128);                                                                   \
-        __m512i *ap = (__m512i *)a, *ae = (__m512i *)(a + k - (k % sizeof(__m256i))), *bp = (__m512i *)b;                          \
+        __m512i *ap = (__m512i *)a, *ae = (__m512i *)(a + k - (k % sizeof(__m512i))), *bp = (__m512i *)b;                          \
         for (; ap < ae; ap++, bp++) {                                                                                              \
             __m512i bx = _mm512_loadu_si512(bp);                                                                                   \
             __m512i lo = _mm512_and_si512(bx, mask);                                                                               \
