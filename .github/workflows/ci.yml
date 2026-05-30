@@ -3,25 +3,40 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  ci:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: ["ubuntu-20.04"]
+  ci-x86:
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - name: Dependencies
         run: |
           sudo apt update
-          sudo apt install clang-tools valgrind
+          sudo apt install -y clang-tools valgrind
 
       - name: Tests
         run: make check
+
+      - name: Tests (Sanitizers)
+        run: make check-asan
 
       - name: Clang Analyzer
         run: make scan
 
       - name: Valgrind
         run: make valgrind
+
+  ci-arm64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y qemu-user-static binfmt-support gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+
+      - name: Tests (ARM64 Emulation)
+        run: |
+          make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check

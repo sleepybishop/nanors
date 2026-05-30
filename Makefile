@@ -6,7 +6,7 @@ t/00util/bench
 
 #CPPFLAGS=-DOBLAS_AVX2
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize 
+CFLAGS  += -march=native -funroll-loops -ftree-vectorize
 
 all: rs.o
 
@@ -40,8 +40,7 @@ gperf: clean t/00util/bench
 	pprof ./t/00util/bench gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 
-ubsan: CC=clang
-ubsan: CFLAGS += -fsanitize=undefined,implicit-conversion
-ubsan: LDLIBS += -lubsan
-ubsan: clean t/00util/test
-	./t/00util/test
+check-asan: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+check-asan: LDLIBS += -fsanitize=address,undefined
+check-asan: clean $(TEST_UTILS)
+	prove -I. -v t/*.t
