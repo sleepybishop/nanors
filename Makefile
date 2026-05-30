@@ -22,7 +22,7 @@ check: clean $(TEST_UTILS)
 	prove -I. -v t/*.t
 
 clean:
-	$(RM) *.o *.a $(TEST_UTILS) $(OBJ)
+	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o
 
 indent:
 	find -name '*.[h,c]' | xargs clang-format -i
