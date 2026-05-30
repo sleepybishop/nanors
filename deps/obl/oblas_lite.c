@@ -26,6 +26,13 @@ static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
         *ap = gf2_8_mul(u, *ap);
 }
 
+static void obl_scale_copy_ref(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap != ae; ap++, bp++)
+        *ap = gf2_8_mul(u, *bp);
+}
+
 #else
 #include "gf2_8_mul_table.h"
 
@@ -44,6 +51,14 @@ static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
     register u8 *ap = a, *ae = &a[k];
     for (; ap != ae; ap++)
         *ap = u_row[*ap];
+}
+
+static void obl_scale_copy_ref(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    register const u8 *u_row = &GF2_8_MUL[u << 8];
+    register u8 *ap = a, *ae = &a[k], *bp = b;
+    for (; ap != ae; ap++, bp++)
+        *ap = u_row[*bp];
 }
 #endif
 
@@ -255,6 +270,11 @@ void obl_axpy(u8 *a, u8 *b, u8 u, unsigned k)
 void obl_scal(u8 *a, u8 u, unsigned k)
 {
     OBL_SHUF(obl_scal, a, a, OBL_NOOP);
+}
+
+void obl_scale_copy(u8 *a, u8 *b, u8 u, unsigned k)
+{
+    OBL_SHUF(obl_scale_copy, a, b, OBL_NOOP);
 }
 
 void obl_swap(u8 *a, u8 *b, unsigned k)

@@ -33,9 +33,22 @@ static void gemm(u8 *a, u8 **b, u8 **c, int n, int k, int m)
     int ci = 0;
     for (int row = 0; row < n; row++, ci++) {
         u8 *ap = a + (row * k);
-        memset(c[ci], 0, m);
-        for (int idx = 0; idx < k; idx++)
+        int idx = 0;
+        while (idx < k && ap[idx] == 0) {
+            idx++;
+        }
+        if (idx == k) {
+            memset(c[ci], 0, m);
+            continue;
+        }
+        if (ap[idx] == 1) {
+            memcpy(c[ci], b[idx], m);
+        } else {
+            obl_scale_copy(c[ci], b[idx], ap[idx], m);
+        }
+        for (idx++; idx < k; idx++) {
             axpy(c[ci], b[idx], ap[idx], m);
+        }
     }
 }
 
