@@ -38,5 +38,8 @@ jobs:
           sudo apt install -y qemu-user-static binfmt-support gcc-aarch64-linux-gnu libc6-dev-arm64-cross
 
       - name: Tests (ARM64 Emulation)
+        env:
+          QEMU_LD_PREFIX: /usr/aarch64-linux-gnu
+          CPPFLAGS: -DOBLAS_NEON
         run: |
           make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check
