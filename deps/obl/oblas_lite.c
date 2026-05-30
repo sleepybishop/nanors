@@ -49,8 +49,19 @@ static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
 
 void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 {
-    for (unsigned idx = 0, p = 0; idx < k; idx += 8 * sizeof(u32), p++) {
+    unsigned idx = 0, p = 0;
+    unsigned k_fast = k & ~31;
+    for (; idx < k_fast; idx += 32, p++) {
         u32 tmp = b[p];
+        while (tmp > 0) {
+            unsigned tz = __builtin_ctz(tmp);
+            tmp = tmp & (tmp - 1);
+            a[tz + idx] ^= u;
+        }
+    }
+    if (idx < k) {
+        u32 tmp = b[p];
+        tmp &= (1U << (k - idx)) - 1;
         while (tmp > 0) {
             unsigned tz = __builtin_ctz(tmp);
             tmp = tmp & (tmp - 1);
@@ -90,7 +101,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #define OBL_AXPYB32(a, b, u, k)                                                                                                    \
     do {                                                                                                                           \
-        __m512i *ap = (__m512i *)a, *ae = (__m512i *)(a + k);                                                                      \
+        __m512i *ap = (__m512i *)a, *ae = (__m512i *)(a + (k & ~63));                                                              \
         __m512i scatter =                                                                                                          \
             _mm512_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000,       \
                              0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);      \
@@ -98,7 +109,8 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
             _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201,       \
                              0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201);      \
         __m512i up = _mm512_set1_epi8(u);                                                                                          \
-        for (unsigned p = 0; ap < ae; p++, ap++) {                                                                                 \
+        unsigned p = 0;                                                                                                            \
+        for (; ap < ae; p += 2, ap++) {                                                                                            \
             __m512i bcast = _mm512_set1_epi32(b[p]);                                                                               \
             __m512i ret = _mm512_shuffle_epi8(bcast, scatter);                                                                     \
             ret = _mm512_andnot_si512(ret, cmpmask);                                                                               \
@@ -106,6 +118,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
             ret = _mm512_mask_blend_epi8(tmp, _mm512_setzero_si512(), up);                                                         \
             _mm512_storeu_si512(ap, _mm512_xor_si512(_mm512_loadu_si512(ap), ret));                                                \
         }                                                                                                                          \
+        obl_axpyb32_ref((u8 *)ap, b + p, u, k & 63);                                                                               \
     } while (0)
 
 #else
@@ -138,19 +151,21 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #define OBL_AXPYB32(a, b, u, k)                                                                                                    \
     do {                                                                                                                           \
-        __m256i *ap = (__m256i *)a, *ae = (__m256i *)(a + k);                                                                      \
+        __m256i *ap = (__m256i *)a, *ae = (__m256i *)(a + (k & ~31));                                                              \
         __m256i scatter =                                                                                                          \
             _mm256_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);      \
         __m256i cmpmask =                                                                                                          \
             _mm256_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201);      \
         __m256i up = _mm256_set1_epi8(u);                                                                                          \
-        for (unsigned p = 0; ap < ae; p++, ap++) {                                                                                 \
+        unsigned p = 0;                                                                                                            \
+        for (; ap < ae; p++, ap++) {                                                                                               \
             __m256i bcast = _mm256_set1_epi32(b[p]);                                                                               \
             __m256i ret = _mm256_shuffle_epi8(bcast, scatter);                                                                     \
             ret = _mm256_andnot_si256(ret, cmpmask);                                                                               \
             ret = _mm256_and_si256(_mm256_cmpeq_epi8(ret, _mm256_setzero_si256()), up);                                            \
             _mm256_storeu_si256(ap, _mm256_xor_si256(_mm256_loadu_si256(ap), ret));                                                \
         }                                                                                                                          \
+        obl_axpyb32_ref((u8 *)ap, b + p, u, k & 31);                                                                               \
     } while (0)
 
 #else
@@ -188,12 +203,13 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #define OBL_AXPYB32(a, b, u, k)                                                                                                    \
     do {                                                                                                                           \
-        __m128i *ap = (__m128i *)a, *ae = (__m128i *)(a + k);                                                                      \
+        __m128i *ap = (__m128i *)a, *ae = (__m128i *)(a + (k & ~31));                                                              \
         __m128i scatter_hi = _mm_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202);                                        \
         __m128i scatter_lo = _mm_set_epi32(0x01010101, 0x01010101, 0x00000000, 0x00000000);                                        \
         __m128i cmpmask = _mm_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201);                                           \
         __m128i up = _mm_set1_epi8(u);                                                                                             \
-        for (unsigned p = 0; ap < ae; p++, ap++) {                                                                                 \
+        unsigned p = 0;                                                                                                            \
+        for (; ap < ae; p++, ap++) {                                                                                               \
             __m128i bcast = _mm_set1_epi32(b[p]);                                                                                  \
             __m128i ret_lo = _mm_shuffle_epi8(bcast, scatter_lo);                                                                  \
             __m128i ret_hi = _mm_shuffle_epi8(bcast, scatter_hi);                                                                  \
@@ -205,6 +221,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
             ap++;                                                                                                                  \
             _mm_storeu_si128(ap, _mm_xor_si128(_mm_loadu_si128(ap), ret_hi));                                                      \
         }                                                                                                                          \
+        obl_axpyb32_ref((u8 *)ap, b + p, u, k & 31);                                                                               \
     } while (0)
 
 #else
