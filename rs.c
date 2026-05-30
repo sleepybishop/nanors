@@ -57,7 +57,7 @@ static int invert_mat(u8 *src, u8 *wrk, u8 **dst, int V0, int K, int T, u8 *c, u
     }
     for (int x = 0; x < W; x++) {
         u = GF2_8_INV[wrk[x * W + x]];
-        scal(wrk + x * W + x, u, W);
+        scal(wrk + x * W + x, u, W - x);
         scal(dst[c[V0b + x]], u, T);
         for (int row = x + 1; row < W; row++) {
             u = wrk[row * W + x];
