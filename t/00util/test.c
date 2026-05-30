@@ -16,6 +16,8 @@ typedef reed_solomon rs_t;
 static int verify_buffers(uint8_t **orig, uint8_t **reconstructed, int K, int T)
 {
     for (int i = 0; i < K; i++) {
+        assert(orig[i] != NULL);
+        assert(reconstructed[i] != NULL);
         for (int j = 0; j < T; j++) {
             if (orig[i][j] != reconstructed[i][j]) {
                 return 0;
@@ -28,18 +30,38 @@ static int verify_buffers(uint8_t **orig, uint8_t **reconstructed, int K, int T)
 // Runs a single RS encode/decode verification
 int test_codec_run(int K, int N, int T, int erasures_count, int seed)
 {
+    if (K <= 0 || N <= 0 || T <= 0 || erasures_count < 0) {
+        printf("invalid dimensions\n");
+        return -1;
+    }
+
     uint8_t **buf = calloc(K + N, sizeof(uint8_t *));
     uint8_t **cmp = calloc(K + N, sizeof(uint8_t *));
     uint8_t *marks = calloc(1, K + N);
     int status = 0;
 
+    if (!buf || !cmp || !marks) {
+        printf("out of memory\n");
+        free(buf);
+        free(cmp);
+        free(marks);
+        return -1;
+    }
+
     for (int i = 0; i < K + N; i++) {
         buf[i] = calloc(1, T);
         cmp[i] = calloc(1, T);
+        if (!buf[i] || !cmp[i]) {
+            printf("out of memory\n");
+            status = -1;
+            goto cleanup;
+        }
     }
 
     // Populate data shards with deterministic random data
     for (int i = 0; i < K; i++) {
+        assert(buf[i] != NULL);
+        assert(cmp[i] != NULL);
         for (int j = 0; j < T; j++) {
             buf[i][j] = MAP(rand(), RAND_MAX, 0, 256);
             cmp[i][j] = buf[i][j];
@@ -60,6 +82,7 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
     while (erased < erasures_count) {
         int at = rand() % (K + N);
         if (marks[at] == 0) {
+            assert(buf[at] != NULL);
             memset(buf[at], 0, T);
             marks[at] = 1;
             erased++;
@@ -89,18 +112,38 @@ cleanup:
 // Runs a single RS encode/decode verification with explicit erasures mask
 int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
 {
+    if (K <= 0 || N <= 0 || T <= 0) {
+        printf("invalid dimensions\n");
+        return -1;
+    }
+
     uint8_t **buf = calloc(K + N, sizeof(uint8_t *));
     uint8_t **cmp = calloc(K + N, sizeof(uint8_t *));
     uint8_t *marks = calloc(1, K + N);
     int status = 0;
 
+    if (!buf || !cmp || !marks) {
+        printf("out of memory\n");
+        free(buf);
+        free(cmp);
+        free(marks);
+        return -1;
+    }
+
     for (int i = 0; i < K + N; i++) {
         buf[i] = calloc(1, T);
         cmp[i] = calloc(1, T);
+        if (!buf[i] || !cmp[i]) {
+            printf("out of memory\n");
+            status = -1;
+            goto cleanup;
+        }
     }
 
     // Populate data shards with deterministic random data
     for (int i = 0; i < K; i++) {
+        assert(buf[i] != NULL);
+        assert(cmp[i] != NULL);
         for (int j = 0; j < T; j++) {
             buf[i][j] = MAP(rand(), RAND_MAX, 0, 256);
             cmp[i][j] = buf[i][j];
@@ -118,6 +161,7 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
 
     for (int i = 0; i < K + N; i++) {
         if ((erasure_mask >> i) & 1) {
+            assert(buf[i] != NULL);
             memset(buf[i], 0, T);
             marks[i] = 1;
         }
