@@ -83,7 +83,7 @@ reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
 {
     reed_solomon *rs = buf;
 
-    if ((ds + ps) > DATA_SHARDS_MAX || ds <= 0 || ps <= 0)
+    if (ds <= 0 || ds > DATA_SHARDS_MAX || ps <= 0 || ps > DATA_SHARDS_MAX || (ds + ps) > DATA_SHARDS_MAX)
         return NULL;
 
     if (len < reed_solomon_bufsize(ds, ps))
@@ -127,7 +127,7 @@ void reed_solomon_release(reed_solomon *rs)
 
 int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, int bs)
 {
-    if (nr_shards < rs->ts)
+    if (nr_shards < rs->ts || bs <= 0)
         return -1;
 
     u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
@@ -163,7 +163,7 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
 
 int reed_solomon_encode(reed_solomon *rs, u8 **shards, int nr_shards, int bs)
 {
-    if (nr_shards < rs->ts)
+    if (nr_shards < rs->ts || bs <= 0)
         return -1;
     gemm(rs->p, shards, shards + rs->ds, rs->ps, rs->ds, bs);
     return 0;
