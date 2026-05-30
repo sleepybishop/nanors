@@ -12,7 +12,7 @@ typedef struct _reed_solomon {
     uint8_t p[];
 } reed_solomon;
 
-#define reed_solomon_bufsize(ds, ps) (sizeof(reed_solomon) + 2 * (ps) * (ds))
+#define reed_solomon_bufsize(ds, ps) (sizeof(reed_solomon) + (ps) * (ds) + (ds) * (ds))
 #define reed_solomon_reconstruct reed_solomon_decode
 
 void reed_solomon_init(void);
