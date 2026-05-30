@@ -147,9 +147,9 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
 
     int i = 0;
     for (int j = rs->ds; i < gaps; i++, j++) {
-        while (marks[j])
+        while (j < rs->ts && marks[j])
             j++;
-        if (j >= nr_shards)
+        if (j >= rs->ts)
             break;
         rowperm[i] = j - rs->ds;
         memcpy(data[erasures[i]], data[j], bs);
