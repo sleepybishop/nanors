@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "rs.h"
+#include "oblas_lite.h"
 
 #define MAP(x, max_x, m, n) (m + x / (max_x / (n - m) + 1))
 
@@ -21,8 +22,8 @@ typedef reed_solomon rs_t;
 void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K, int N)
 {
     for (int i = 0; i < K + N; i++) {
-        free(buf[i]);
-        free(cmp[i]);
+        obl_free(buf[i]);
+        obl_free(cmp[i]);
     }
     free(buf);
     free(cmp);
@@ -50,8 +51,8 @@ int run(int seed, int K, int N, int T, double *et, double *dt)
     }
 
     for (int i = 0; i < K + N; i++) {
-        buf[i] = calloc(1, T);
-        cmp[i] = calloc(1, T);
+        buf[i] = obl_alloc(1, T);
+        cmp[i] = obl_alloc(1, T);
         if (!buf[i] || !cmp[i]) {
             printf("out of memory\n");
             cleanup(buf, cmp, marks, K, N);

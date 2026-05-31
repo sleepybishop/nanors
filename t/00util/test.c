@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "rs.h"
+#include "oblas_lite.h"
 
 #define MAP(x, max_x, m, n) (m + x / (max_x / (n - m) + 1))
 
@@ -49,8 +50,8 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
     }
 
     for (int i = 0; i < K + N; i++) {
-        buf[i] = calloc(1, T);
-        cmp[i] = calloc(1, T);
+        buf[i] = obl_alloc(1, T);
+        cmp[i] = obl_alloc(1, T);
         if (!buf[i] || !cmp[i]) {
             printf("out of memory\n");
             status = -1;
@@ -100,8 +101,8 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
 
 cleanup:
     for (int i = 0; i < K + N; i++) {
-        free(buf[i]);
-        free(cmp[i]);
+        obl_free(buf[i]);
+        obl_free(cmp[i]);
     }
     free(buf);
     free(cmp);
@@ -131,8 +132,8 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
     }
 
     for (int i = 0; i < K + N; i++) {
-        buf[i] = calloc(1, T);
-        cmp[i] = calloc(1, T);
+        buf[i] = obl_alloc(1, T);
+        cmp[i] = obl_alloc(1, T);
         if (!buf[i] || !cmp[i]) {
             printf("out of memory\n");
             status = -1;
@@ -178,8 +179,8 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
 
 cleanup:
     for (int i = 0; i < K + N; i++) {
-        free(buf[i]);
-        free(cmp[i]);
+        obl_free(buf[i]);
+        obl_free(cmp[i]);
     }
     free(buf);
     free(cmp);

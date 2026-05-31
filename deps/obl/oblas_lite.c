@@ -88,7 +88,9 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #if defined(OBLAS_AVX512)
 #include <immintrin.h>
 
+#ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN 64
+#endif
 
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
@@ -140,7 +142,9 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #if defined(OBLAS_AVX2)
 #include <immintrin.h>
 
+#ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN 32
+#endif
 
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
@@ -188,7 +192,9 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #include <arm_neon.h>
 
+#ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN 16
+#endif
 
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
@@ -240,7 +246,9 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #include <emmintrin.h>
 #include <tmmintrin.h>
 
+#ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN 16
+#endif
 
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
@@ -289,7 +297,9 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #else
 
+#ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN (sizeof(void *))
+#endif
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         op##_ref(a, b, u, k);                                                                                                      \
@@ -338,4 +348,57 @@ void obl_swap(u8 *a, u8 *b, unsigned k)
 void obl_axpyb32(u8 *a, u32 *b, u8 u, unsigned k)
 {
     OBL_AXPYB32(a, b, u, k);
+}
+
+#include <stdlib.h>
+#include <string.h>
+
+void *obl_alloc(size_t num_rows, size_t row_size)
+{
+    if (num_rows == 0 || row_size == 0) {
+        return NULL;
+    }
+    size_t alignment = OBLAS_ALIGN;
+    size_t stride = row_size;
+    if (alignment > 1) {
+        stride = (row_size + alignment - 1) & ~(alignment - 1);
+    }
+    size_t total_size = num_rows * stride;
+
+    void *ptr = NULL;
+    if (alignment <= 1) {
+        ptr = calloc(num_rows, stride);
+    } else {
+#if defined(_MSC_VER) || defined(__MINGW32__)
+        ptr = _aligned_malloc(total_size, alignment);
+        if (ptr) {
+            memset(ptr, 0, total_size);
+        }
+#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(__posix__)
+        if (posix_memalign(&ptr, alignment, total_size) == 0) {
+            memset(ptr, 0, total_size);
+        } else {
+            ptr = NULL;
+        }
+#else
+        size_t aligned_size = (total_size + alignment - 1) & ~(alignment - 1);
+        ptr = aligned_alloc(alignment, aligned_size);
+        if (ptr) {
+            memset(ptr, 0, aligned_size);
+        }
+#endif
+    }
+    return ptr;
+}
+
+void obl_free(void *ptr)
+{
+    if (!ptr) {
+        return;
+    }
+#if defined(_MSC_VER) || defined(__MINGW32__)
+    _aligned_free(ptr);
+#else
+    free(ptr);
+#endif
 }

@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -120,12 +122,12 @@ reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
 reed_solomon *reed_solomon_new(int ds, int ps)
 {
     size_t len = reed_solomon_bufsize(ds, ps);
-    void *buf = malloc(len);
+    void *buf = obl_alloc(1, len);
     if (!buf)
         return NULL;
 
     if (reed_solomon_new_static(buf, len, ds, ps) == NULL) {
-        free(buf);
+        obl_free(buf);
         return NULL;
     }
 
@@ -135,7 +137,7 @@ reed_solomon *reed_solomon_new(int ds, int ps)
 void reed_solomon_release(reed_solomon *rs)
 {
     if (rs)
-        free(rs);
+        obl_free(rs);
 }
 
 int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, int bs)
