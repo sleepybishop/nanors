@@ -184,13 +184,61 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
     } while (0)
 
 #else
-#if defined(OBLAS_SSE3) || defined(OBLAS_NEON)
 #if defined(OBLAS_NEON)
-#include "sse2neon/sse2neon.h"
-#else
+
+#include <arm_neon.h>
+
+#define OBLAS_ALIGN 16
+
+#define OBL_SHUF(op, a, b, f)                                                                                                      \
+    do {                                                                                                                           \
+        const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
+        const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                   \
+        const uint8x16_t mask = vdupq_n_u8(0x0f);                                                                                  \
+        const uint8x16_t urow_lo = vld1q_u8(u_lo);                                                                                 \
+        const uint8x16_t urow_hi = vld1q_u8(u_hi);                                                                                 \
+        uint8_t *ap = (uint8_t *)a;                                                                                                \
+        uint8_t *ae = (uint8_t *)(a + k - (k % 16));                                                                               \
+        const uint8_t *bp = (const uint8_t *)b;                                                                                    \
+        for (; ap < ae; ap += 16, bp += 16) {                                                                                      \
+            uint8x16_t bx = vld1q_u8(bp);                                                                                          \
+            uint8x16_t lo = vandq_u8(bx, mask);                                                                                        \
+            uint8x16_t hi = vshrq_n_u8(bx, 4);                                                                                     \
+            lo = vqtbl1q_u8(urow_lo, lo);                                                                                          \
+            hi = vqtbl1q_u8(urow_hi, hi);                                                                                          \
+            vst1q_u8(ap, f(vld1q_u8(ap), veorq_u8(lo, hi)));                                                                       \
+        }                                                                                                                          \
+        op##_ref((u8 *)ap, (u8 *)bp, u, k % 16);                                                                                   \
+    } while (0)
+
+#define OBL_SHUF_XOR veorq_u8
+
+#define OBL_AXPYB32(a, b, u, k)                                                                                                    \
+    do {                                                                                                                           \
+        uint8_t *ap = (uint8_t *)a;                                                                                                \
+        uint8_t *ae = (uint8_t *)(a + (k & ~31));                                                                                  \
+        const uint8x16_t scatter_hi = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3};                                            \
+        const uint8x16_t scatter_lo = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1};                                            \
+        const uint8x16_t cmpmask = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};\
+        const uint8x16_t up = vdupq_n_u8(u);                                                                                       \
+        unsigned p = 0;                                                                                                            \
+        for (; ap < ae; p++) {                                                                                                     \
+            uint8x16_t bcast = vreinterpretq_u8_u32(vdupq_n_u32(b[p]));                                                            \
+            uint8x16_t ret_lo = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_lo)));                                       \
+            uint8x16_t ret_hi = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_hi)));                                       \
+            ret_lo = vandq_u8(ret_lo, up);                                                                                         \
+            ret_hi = vandq_u8(ret_hi, up);                                                                                         \
+            vst1q_u8(ap, veorq_u8(vld1q_u8(ap), ret_lo));                                                                          \
+            vst1q_u8(ap + 16, veorq_u8(vld1q_u8(ap + 16), ret_hi));                                                                \
+            ap += 32;                                                                                                              \
+        }                                                                                                                          \
+        obl_axpyb32_ref((u8 *)ap, b + p, u, k & 31);                                                                               \
+    } while (0)
+
+#elif defined(OBLAS_SSE3)
+
 #include <emmintrin.h>
 #include <tmmintrin.h>
-#endif
 
 #define OBLAS_ALIGN 16
 
