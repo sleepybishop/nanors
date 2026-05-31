@@ -1,4 +1,6 @@
+#ifndef _DEFAULT_SOURCE
 #define _DEFAULT_SOURCE
+#endif
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
