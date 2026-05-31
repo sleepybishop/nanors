@@ -35,6 +35,9 @@ static void obl_scale_copy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 
 #else
 #include "gf2_8_mul_table.h"
+#if defined(__GFNI__)
+#include "gf2_8_affine_mat.h"
+#endif
 
 static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
@@ -92,6 +95,34 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #define OBLAS_ALIGN 64
 #endif
 
+#if defined(__GFNI__)
+#define OBL_SHUF(op, a, b, f)                                                                                                      \
+    do {                                                                                                                           \
+        const __m512i u_mat = _mm512_set1_epi64(GF2_8_AFFINE_MAT[u]);                                                              \
+        __m512i *ap = (__m512i *)a, *ae = (__m512i *)(a + k - (k % (4 * sizeof(__m512i)))), *bp = (__m512i *)b;                     \
+        for (; ap < ae; ap += 4, bp += 4) {                                                                                        \
+            __m512i bx0 = _mm512_loadu_si512(bp + 0);                                                                              \
+            __m512i bx1 = _mm512_loadu_si512(bp + 1);                                                                              \
+            __m512i bx2 = _mm512_loadu_si512(bp + 2);                                                                              \
+            __m512i bx3 = _mm512_loadu_si512(bp + 3);                                                                              \
+            __m512i prod0 = _mm512_gf2p8affine_epi64_epi8(bx0, u_mat, 0);                                                          \
+            __m512i prod1 = _mm512_gf2p8affine_epi64_epi8(bx1, u_mat, 0);                                                          \
+            __m512i prod2 = _mm512_gf2p8affine_epi64_epi8(bx2, u_mat, 0);                                                          \
+            __m512i prod3 = _mm512_gf2p8affine_epi64_epi8(bx3, u_mat, 0);                                                          \
+            _mm512_storeu_si512(ap + 0, f(_mm512_loadu_si512(ap + 0), prod0));                                                     \
+            _mm512_storeu_si512(ap + 1, f(_mm512_loadu_si512(ap + 1), prod1));                                                     \
+            _mm512_storeu_si512(ap + 2, f(_mm512_loadu_si512(ap + 2), prod2));                                                     \
+            _mm512_storeu_si512(ap + 3, f(_mm512_loadu_si512(ap + 3), prod3));                                                     \
+        }                                                                                                                          \
+        __m512i *ae2 = (__m512i *)(a + k - (k % sizeof(__m512i)));                                                                 \
+        for (; ap < ae2; ap++, bp++) {                                                                                             \
+            __m512i bx = _mm512_loadu_si512(bp);                                                                                   \
+            __m512i prod = _mm512_gf2p8affine_epi64_epi8(bx, u_mat, 0);                                                            \
+            _mm512_storeu_si512(ap, f(_mm512_loadu_si512(ap), prod));                                                              \
+        }                                                                                                                          \
+        op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m512i));                                                                      \
+    } while (0)
+#else
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
@@ -113,6 +144,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
         }                                                                                                                          \
         op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m512i));                                                                      \
     } while (0)
+#endif
 
 #define OBL_SHUF_XOR _mm512_xor_si512
 
@@ -146,6 +178,34 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 #define OBLAS_ALIGN 32
 #endif
 
+#if defined(__GFNI__)
+#define OBL_SHUF(op, a, b, f)                                                                                                      \
+    do {                                                                                                                           \
+        const __m256i u_mat = _mm256_set1_epi64x(GF2_8_AFFINE_MAT[u]);                                                             \
+        __m256i *ap = (__m256i *)a, *ae = (__m256i *)(a + k - (k % (4 * sizeof(__m256i)))), *bp = (__m256i *)b;                     \
+        for (; ap < ae; ap += 4, bp += 4) {                                                                                        \
+            __m256i bx0 = _mm256_loadu_si256(bp + 0);                                                                              \
+            __m256i bx1 = _mm256_loadu_si256(bp + 1);                                                                              \
+            __m256i bx2 = _mm256_loadu_si256(bp + 2);                                                                              \
+            __m256i bx3 = _mm256_loadu_si256(bp + 3);                                                                              \
+            __m256i prod0 = _mm256_gf2p8affine_epi64_epi8(bx0, u_mat, 0);                                                          \
+            __m256i prod1 = _mm256_gf2p8affine_epi64_epi8(bx1, u_mat, 0);                                                          \
+            __m256i prod2 = _mm256_gf2p8affine_epi64_epi8(bx2, u_mat, 0);                                                          \
+            __m256i prod3 = _mm256_gf2p8affine_epi64_epi8(bx3, u_mat, 0);                                                          \
+            _mm256_storeu_si256(ap + 0, f(_mm256_loadu_si256(ap + 0), prod0));                                                     \
+            _mm256_storeu_si256(ap + 1, f(_mm256_loadu_si256(ap + 1), prod1));                                                     \
+            _mm256_storeu_si256(ap + 2, f(_mm256_loadu_si256(ap + 2), prod2));                                                     \
+            _mm256_storeu_si256(ap + 3, f(_mm256_loadu_si256(ap + 3), prod3));                                                     \
+        }                                                                                                                          \
+        __m256i *ae2 = (__m256i *)(a + k - (k % sizeof(__m256i)));                                                                 \
+        for (; ap < ae2; ap++, bp++) {                                                                                             \
+            __m256i bx = _mm256_loadu_si256(bp);                                                                                   \
+            __m256i prod = _mm256_gf2p8affine_epi64_epi8(bx, u_mat, 0);                                                            \
+            _mm256_storeu_si256(ap, f(_mm256_loadu_si256(ap), prod));                                                              \
+        }                                                                                                                          \
+        op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m256i));                                                                      \
+    } while (0)
+#else
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
@@ -165,6 +225,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
         }                                                                                                                          \
         op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m256i));                                                                      \
     } while (0)
+#endif
 
 #define OBL_SHUF_XOR _mm256_xor_si256
 
@@ -245,11 +306,42 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #include <emmintrin.h>
 #include <tmmintrin.h>
+#if defined(__GFNI__)
+#include <immintrin.h>
+#endif
 
 #ifndef OBLAS_ALIGN
 #define OBLAS_ALIGN 16
 #endif
 
+#if defined(__GFNI__)
+#define OBL_SHUF(op, a, b, f)                                                                                                      \
+    do {                                                                                                                           \
+        const __m128i u_mat = _mm_set1_epi64x(GF2_8_AFFINE_MAT[u]);                                                                \
+        __m128i *ap = (__m128i *)a, *ae = (__m128i *)(a + k - (k % (4 * sizeof(__m128i)))), *bp = (__m128i *)b;                     \
+        for (; ap < ae; ap += 4, bp += 4) {                                                                                        \
+            __m128i bx0 = _mm_loadu_si128(bp + 0);                                                                                 \
+            __m128i bx1 = _mm_loadu_si128(bp + 1);                                                                                 \
+            __m128i bx2 = _mm_loadu_si128(bp + 2);                                                                                 \
+            __m128i bx3 = _mm_loadu_si128(bp + 3);                                                                                 \
+            __m128i prod0 = _mm_gf2p8affine_epi64_epi8(bx0, u_mat, 0);                                                             \
+            __m128i prod1 = _mm_gf2p8affine_epi64_epi8(bx1, u_mat, 0);                                                             \
+            __m128i prod2 = _mm_gf2p8affine_epi64_epi8(bx2, u_mat, 0);                                                             \
+            __m128i prod3 = _mm_gf2p8affine_epi64_epi8(bx3, u_mat, 0);                                                             \
+            _mm_storeu_si128(ap + 0, f(_mm_loadu_si128(ap + 0), prod0));                                                           \
+            _mm_storeu_si128(ap + 1, f(_mm_loadu_si128(ap + 1), prod1));                                                           \
+            _mm_storeu_si128(ap + 2, f(_mm_loadu_si128(ap + 2), prod2));                                                           \
+            _mm_storeu_si128(ap + 3, f(_mm_loadu_si128(ap + 3), prod3));                                                           \
+        }                                                                                                                          \
+        __m128i *ae2 = (__m128i *)(a + k - (k % sizeof(__m128i)));                                                                 \
+        for (; ap < ae2; ap++, bp++) {                                                                                             \
+            __m128i bx = _mm_loadu_si128(bp);                                                                                      \
+            __m128i prod = _mm_gf2p8affine_epi64_epi8(bx, u_mat, 0);                                                               \
+            _mm_storeu_si128(ap, f(_mm_loadu_si128(ap), prod));                                                                    \
+        }                                                                                                                          \
+        op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m128i));                                                                      \
+    } while (0)
+#else
 #define OBL_SHUF(op, a, b, f)                                                                                                      \
     do {                                                                                                                           \
         const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                   \
@@ -269,6 +361,7 @@ void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
         }                                                                                                                          \
         op##_ref((u8 *)ap, (u8 *)bp, u, k % sizeof(__m128i));                                                                      \
     } while (0)
+#endif
 
 #define OBL_SHUF_XOR _mm_xor_si128
 
