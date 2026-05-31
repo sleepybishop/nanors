@@ -371,7 +371,7 @@ void oblas_get_impl(struct oblas_impl *impl)
         impl->axiy = obl_axiy_avx2_std;
         impl->axpyb32 = obl_axpyb32_avx2;
         impl->align_size = 32;
-    } else if (__builtin_cpu_supports("sse3") && __builtin_cpu_supports("gfni")) {
+    } else if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_ssse3_gfni;
         impl->scal = obl_scal_ssse3_gfni;
         impl->axiy = obl_axiy_ssse3_gfni;
