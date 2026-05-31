@@ -43,3 +43,30 @@ jobs:
           CPPFLAGS: -DOBLAS_NEON
         run: |
           make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check
+
+  ci-avx2:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests (AVX2)
+        run: make check CPPFLAGS="-DOBLAS_AVX2" CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -mavx2"
+
+  ci-avx512:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Intel SDE
+        run: |
+          wget https://downloadmirror.intel.com/813591/sde-external-9.33.0-2024-01-07-lin.tar.xz
+          tar xf sde-external-9.33.0-2024-01-07-lin.tar.xz
+          echo "$PWD/sde-external-9.33.0-2024-01-07-lin" >> $GITHUB_PATH
+
+      - name: Tests (AVX-512 Emulation)
+        run: |
+          make t/00util/test t/00util/bench CPPFLAGS="-DOBLAS_AVX512" CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -mavx512f -mavx512bw"
+          sde64 -skx -- ./t/00util/test
+          sde64 -skx -- ./t/00util/bench 5 2 1280
