@@ -1,14 +1,13 @@
-OBJ=rs.o
+OBJ=rs.o deps/obl/oblas_lite.o
 
 TEST_UTILS=\
 t/00util/test\
 t/00util/bench
 
-#CPPFLAGS=-DOBLAS_AVX2
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize
 
-all: rs.o
+all: $(OBJ)
 
 t/00util/test.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 

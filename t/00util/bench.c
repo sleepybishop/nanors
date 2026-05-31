@@ -23,8 +23,8 @@ typedef reed_solomon rs_t;
 void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K, int N)
 {
     for (int i = 0; i < K + N; i++) {
-        obl_free(buf[i]);
-        obl_free(cmp[i]);
+        reed_solomon_free(buf[i]);
+        reed_solomon_free(cmp[i]);
     }
     free(buf);
     free(cmp);
@@ -52,8 +52,8 @@ int run(int seed, int K, int N, int T, double *et, double *dt)
     }
 
     for (int i = 0; i < K + N; i++) {
-        buf[i] = obl_alloc(1, T);
-        cmp[i] = obl_alloc(1, T);
+        buf[i] = reed_solomon_aligned_alloc(T);
+        cmp[i] = reed_solomon_aligned_alloc(T);
         if (!buf[i] || !cmp[i]) {
             printf("out of memory\n");
             cleanup(buf, cmp, marks, K, N);
