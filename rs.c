@@ -188,7 +188,6 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
     if (!rs || !data || !marks || nr_shards < rs->ts || bs <= 0)
         return -1;
 
-
     u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
     u8 erasures[rs->ds], colperm[rs->ds];
     u8 gaps = 0, rowperm[rs->ds];
@@ -224,7 +223,6 @@ int reed_solomon_encode(reed_solomon *rs, u8 **shards, int nr_shards, int bs)
 {
     if (!rs || !shards || nr_shards < rs->ts || bs <= 0)
         return -1;
-
 
     gemm(rs, rs->p, shards, shards + rs->ds, rs->ps, rs->ds, bs);
     return 0;

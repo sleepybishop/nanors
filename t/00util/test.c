@@ -195,7 +195,7 @@ cleanup:
 static void run_api_safety_tests(void)
 {
     printf("[API SAFETY] Running parameter checks...\n");
-    
+
     // ds + ps > 255
     rs_t *rs1 = reed_solomon_new(250, 10);
     assert(rs1 == NULL);
@@ -234,7 +234,7 @@ static void run_decoder_failure_tests(void)
 static void run_bounds_and_alignment_tests(void)
 {
     printf("[ALIGNMENT & TAILS] Testing non-aligned buffer sizes and SIMD boundary tails...\n");
-    
+
     // Test sizes from 1 to 130 bytes to comprehensively cover all SIMD tail paths (NEON, AVX2, AVX-512)
     for (int T = 1; T <= 130; T++) {
         // Test varying erasure counts

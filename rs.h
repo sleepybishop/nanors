@@ -28,10 +28,10 @@ void reed_solomon_release(reed_solomon *rs);
 int reed_solomon_encode(reed_solomon *rs, uint8_t **shards, int nr_shards, int bs);
 int reed_solomon_decode(reed_solomon *rs, uint8_t **shards, uint8_t *marks, int nr_shards, int bs);
 
-/* 
- * nanors can process data of any length, but performance is significantly better 
- * when your block sizes (bs) and allocated buffers are padded and aligned to the 
- * optimal simd alignment for your cpu. 
+/*
+ * nanors can process data of any length, but performance is significantly better
+ * when your block sizes (bs) and allocated buffers are padded and aligned to the
+ * optimal simd alignment for your cpu.
  */
 
 /* returns padded/aligned memory */
