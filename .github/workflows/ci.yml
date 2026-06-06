@@ -61,9 +61,9 @@ jobs:
 
       - name: Download Intel SDE
         run: |
-          wget https://downloadmirror.intel.com/813591/sde-external-9.33.0-2024-01-07-lin.tar.xz
-          tar xf sde-external-9.33.0-2024-01-07-lin.tar.xz
-          echo "$PWD/sde-external-9.33.0-2024-01-07-lin" >> $GITHUB_PATH
+          wget https://github.com/nihui/ncnn-assets/releases/download/toolchain/sde-external-10.8.0-2026-03-15-lin.tar.xz
+          tar xf sde-external-10.8.0-2026-03-15-lin.tar.xz
+          echo "$PWD/sde-external-10.8.0-2026-03-15-lin" >> $GITHUB_PATH
 
       - name: Tests (AVX-512 Emulation)
         run: |
