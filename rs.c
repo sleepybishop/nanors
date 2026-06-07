@@ -99,7 +99,7 @@ reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
     if (!buf)
         return NULL;
 
-    reed_solomon *rs = buf;
+    reed_solomon *rs = (reed_solomon *)buf;
 
     if (ds <= 0 || ds > DATA_SHARDS_MAX || ps <= 0 || ps > DATA_SHARDS_MAX || (ds + ps) > DATA_SHARDS_MAX)
         return NULL;
@@ -146,7 +146,7 @@ reed_solomon *reed_solomon_new(int ds, int ps)
         return NULL;
     }
 
-    return buf;
+    return (reed_solomon *)buf;
 }
 
 void reed_solomon_release(reed_solomon *rs)

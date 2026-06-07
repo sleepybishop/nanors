@@ -6,6 +6,10 @@
 
 #define DATA_SHARDS_MAX 255
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct _reed_solomon {
     int ds;
     int ps;
@@ -39,4 +43,9 @@ void *reed_solomon_aligned_alloc(size_t size);
 void reed_solomon_free(void *ptr);
 /* returns the padded block size */
 int reed_solomon_padded_size(int bs);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
