@@ -6,6 +6,10 @@
 
 #include "oblas_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef uint16_t u16;
 
 extern uint16_t GF16_LOG[65536];
@@ -32,5 +36,9 @@ struct oblas16_impl {
 
 void oblas16_get_impl(struct oblas16_impl *impl);
 void oblas16_get_impl_by_name(struct oblas16_impl *impl, const char *name);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // OBLAS16_H

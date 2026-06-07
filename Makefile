@@ -1,8 +1,10 @@
-OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o deps/obl/oblas16.o
+OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o deps/obl/oblas16.o rs16.o
 
 TEST_UTILS=\
 t/00util/test\
-t/00util/bench
+t/00util/bench\
+t/00util/test16\
+t/00util/bench16
 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
 CFLAGS  += -march=native -funroll-loops -ftree-vectorize
@@ -13,12 +15,21 @@ t/00util/test.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
 t/00util/bench.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
+t/00util/test16.o: CPPFLAGS+=-D_DEFAULT_SOURCE
+
+t/00util/bench16.o: CPPFLAGS+=-D_DEFAULT_SOURCE
+
 t/00util/test: t/00util/test.o $(OBJ)
 
 t/00util/bench: t/00util/bench.o $(OBJ)
 
+t/00util/test16: t/00util/test16.o $(OBJ)
+
+t/00util/bench16: t/00util/bench16.o $(OBJ)
+
 check: clean $(TEST_UTILS)
 	prove -I. -v t/*.t
+	./t/00util/test16
 
 clean:
 	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o
@@ -43,3 +54,4 @@ check-asan: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
 check-asan: LDLIBS += -fsanitize=address,undefined
 check-asan: clean $(TEST_UTILS)
 	prove -I. -v t/*.t
+	./t/00util/test16
