@@ -281,7 +281,9 @@ __attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8
     lo_##res = vqtbl1q_u8(urow_lo, lo_##res);                                                                                      \
     hi_##res = vqtbl1q_u8(urow_hi, hi_##res);                                                                                      \
     uint8x16_t res = veorq_u8(lo_##res, hi_##res)
-GENERATE_IMPL(neon, , uint8x16_t, vld1q_u8, vst1q_u8, VEC_INIT_neon, VEC_CORE_neon, veorq_u8)
+#define VEC_LOAD_neon(ptr) vld1q_u8((const uint8_t *)(ptr))
+#define VEC_STORE_neon(ptr, val) vst1q_u8((uint8_t *)(ptr), val)
+GENERATE_IMPL(neon, , uint8x16_t, VEC_LOAD_neon, VEC_STORE_neon, VEC_INIT_neon, VEC_CORE_neon, veorq_u8)
 
 static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
 {

@@ -128,8 +128,6 @@ static void oblas16_scal_ref(u16 *a, u16 u, unsigned k)
         oblas16_axiy_##suffix(a, a, u, k);                                                                                         \
     }
 
-#if defined(OBLAS_ARCH_X86)
-
 static inline void precompute_twist_std(u16 twist, uint8_t *t0l, uint8_t *t1l, uint8_t *t2l, uint8_t *t3l, uint8_t *t0h,
                                         uint8_t *t1h, uint8_t *t2h, uint8_t *t3h)
 {
@@ -164,6 +162,8 @@ static inline void precompute_twist_std(u16 twist, uint8_t *t0l, uint8_t *t1l, u
         t3h[i] = p3 >> 8;
     }
 }
+
+#if defined(OBLAS_ARCH_X86)
 
 static inline void build_4_matrices_gfni(u16 u, uint64_t *M_LL, uint64_t *M_HL, uint64_t *M_LH, uint64_t *M_HH)
 {
@@ -400,7 +400,7 @@ OBLAS16_GENERATE_IMPL_X2(avx512_gfni, __attribute__((target("avx512f,avx512bw,av
     precompute_twist_std(u, t0l, t1l, t2l, t3l, t0h, t1h, t2h, t3h);                                                               \
     uint8x16_t T0_lo = vld1q_u8(t0l), T1_lo = vld1q_u8(t1l), T2_lo = vld1q_u8(t2l), T3_lo = vld1q_u8(t3l);                         \
     uint8x16_t T0_hi = vld1q_u8(t0h), T1_hi = vld1q_u8(t1h), T2_hi = vld1q_u8(t2h), T3_hi = vld1q_u8(t3h);                         \
-    uint16x8_t mask_0f = vdupq_n_u8(0x0F);
+    uint8x16_t mask_0f = vdupq_n_u8(0x0F);
 
 #define VEC_MUL_CORE_neon(x0, x1, res0, res1)                                                                                      \
     do {                                                                                                                           \
@@ -409,10 +409,10 @@ OBLAS16_GENERATE_IMPL_X2(avx512_gfni, __attribute__((target("avx512f,avx512bw,av
         input_v.val[1] = vreinterpretq_u8_u16(x1);                                                                                 \
         uint8x16_t input_l = vuzp1q_u8(input_v.val[0], input_v.val[1]);                                                            \
         uint8x16_t input_h = vuzp2q_u8(input_v.val[0], input_v.val[1]);                                                            \
-        uint8x16_t input_l_l = vandq_u8(input_l, vreinterpretq_u8_u16(mask_0f));                                                   \
-        uint8x16_t input_l_h = vandq_u8(vshrq_n_u8(input_l, 4), vreinterpretq_u8_u16(mask_0f));                                    \
-        uint8x16_t input_h_l = vandq_u8(input_h, vreinterpretq_u8_u16(mask_0f));                                                   \
-        uint8x16_t input_h_h = vandq_u8(vshrq_n_u8(input_h, 4), vreinterpretq_u8_u16(mask_0f));                                    \
+        uint8x16_t input_l_l = vandq_u8(input_l, mask_0f);                                                                         \
+        uint8x16_t input_l_h = vandq_u8(vshrq_n_u8(input_l, 4), mask_0f);                                                          \
+        uint8x16_t input_h_l = vandq_u8(input_h, mask_0f);                                                                         \
+        uint8x16_t input_h_h = vandq_u8(vshrq_n_u8(input_h, 4), mask_0f);                                                          \
         uint8x16_t lo = veorq_u8(veorq_u8(vqtbl1q_u8(T0_lo, input_l_l), vqtbl1q_u8(T1_lo, input_l_h)),                             \
                                  veorq_u8(vqtbl1q_u8(T2_lo, input_h_l), vqtbl1q_u8(T3_lo, input_h_h)));                            \
         uint8x16_t hi = veorq_u8(veorq_u8(vqtbl1q_u8(T0_hi, input_l_l), vqtbl1q_u8(T1_hi, input_l_h)),                             \
