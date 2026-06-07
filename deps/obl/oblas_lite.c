@@ -2,12 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-#define OBLAS_ARCH_X86 1
-#elif defined(__aarch64__) || defined(_M_ARM64) || defined(__arm__) || defined(_M_ARM)
-#define OBLAS_ARCH_ARM 1
-#endif
-
 #if defined(OBLAS_ARCH_X86)
 #include <immintrin.h>
 #include <tmmintrin.h>
@@ -34,14 +28,6 @@ static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
         *ap ^= gf2_8_mul(u, *bp);
 }
 
-static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
-{
-    (void)b;
-    register u8 *ap = a, *ae = &a[k];
-    for (; ap != ae; ap++)
-        *ap = gf2_8_mul(u, *ap);
-}
-
 static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
     register u8 *ap = a, *ae = &a[k], *bp = b;
@@ -56,15 +42,6 @@ static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
     register u8 *ap = a, *ae = &a[k], *bp = b;
     for (; ap != ae; ap++, bp++)
         *ap ^= u_row[*bp];
-}
-
-static void obl_scal_ref(u8 *a, u8 *b, u8 u, unsigned k)
-{
-    (void)b;
-    register const u8 *u_row = &GF2_8_MUL[u << 8];
-    register u8 *ap = a, *ae = &a[k];
-    for (; ap != ae; ap++)
-        *ap = u_row[*ap];
 }
 
 static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
@@ -143,13 +120,13 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
             OBL_SHUF_TEMPLATE(obl_axpy, a, b, VEC_XOR, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                \
         }                                                                                                                          \
     }                                                                                                                              \
-    attr static void obl_scal_##suffix(u8 *a, u8 u, unsigned k)                                                                    \
-    {                                                                                                                              \
-        OBL_SHUF_TEMPLATE(obl_scal, a, a, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
-    }                                                                                                                              \
     attr static void obl_axiy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                                             \
     {                                                                                                                              \
         OBL_SHUF_TEMPLATE(obl_axiy, a, b, OBL_NOOP, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR);                   \
+    }                                                                                                                              \
+    attr static void obl_scal_##suffix(u8 *a, u8 u, unsigned k)                                                                    \
+    {                                                                                                                              \
+        obl_axiy_##suffix(a, a, u, k);                                                                                             \
     }
 
 #if defined(OBLAS_ARCH_X86)
@@ -187,8 +164,8 @@ GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_l
     const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
     const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
     const __m256i mask = _mm256_set1_epi8(0x0f);                                                                                   \
-    const __m256i urow_lo = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_lo));                                   \
-    const __m256i urow_hi = _mm256_broadcastsi128_si256(_mm_loadu_si128((const __m128i *)u_hi))
+    const __m256i urow_lo = _mm256_loadu2_m128i((const __m128i *)u_lo, (const __m128i *)u_lo);                                     \
+    const __m256i urow_hi = _mm256_loadu2_m128i((const __m128i *)u_hi, (const __m128i *)u_hi)
 #define VEC_CORE_avx2_std(bx, res)                                                                                                 \
     __m256i lo_##res = _mm256_and_si256(bx, mask);                                                                                 \
     __m256i hi_##res = _mm256_and_si256(_mm256_srli_epi64(bx, 4), mask);                                                           \
@@ -225,7 +202,7 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     __m512i *ap = (__m512i *)a;
     __m512i *ae = (__m512i *)(a + (k & ~63));
     __m512i scatter =
-        _mm512_set_epi32(0x07070707, 0x07070707, 0x06060606, 0x06060606, 0x05050505, 0x05050505, 0x04040404, 0x04040404, 0x03030303,
+        _mm512_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000, 0x03030303,
                          0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
     __m512i cmpmask =
         _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010,
@@ -233,7 +210,7 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     __m512i up = _mm512_set1_epi8(u);
     unsigned p = 0;
     for (; ap < ae; p += 2, ap++) {
-        __m512i bcast = _mm512_set1_epi64(*(const long long *)(b + p));
+        __m512i bcast = _mm512_set1_epi32(b[p]);
         __m512i ret = _mm512_shuffle_epi8(bcast, scatter);
         ret = _mm512_andnot_si512(ret, cmpmask);
         __mmask64 tmp = _mm512_cmpeq_epi8_mask(ret, _mm512_setzero_si512());
@@ -331,7 +308,7 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
 
 static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
 {
-    obl_scal_ref(a, NULL, u, k);
+    obl_axiy_ref(a, a, u, k);
 }
 
 void oblas_get_impl(struct oblas_impl *impl)
@@ -387,64 +364,5 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->axiy = obl_axiy_neon;
     impl->axpyb32 = obl_axpyb32_neon;
     impl->align_size = 16;
-#endif
-}
-
-void obl_swap(u8 *a, u8 *b, unsigned k)
-{
-    register u8 *ap = a, *ae = &a[k], *bp = b;
-    for (; ap < ae; ap++, bp++) {
-        u8 tmp = *ap;
-        *ap = *bp;
-        *bp = tmp;
-    }
-}
-
-void *obl_alloc(size_t num_rows, size_t row_size, size_t alignment)
-{
-    if (num_rows == 0 || row_size == 0) {
-        return NULL;
-    }
-    size_t stride = row_size;
-    if (alignment > 1) {
-        stride = (row_size + alignment - 1) & ~(alignment - 1);
-    }
-    size_t total_size = num_rows * stride;
-
-    void *ptr = NULL;
-    if (alignment <= 1) {
-        ptr = calloc(num_rows, stride);
-    } else {
-#if defined(_MSC_VER) || defined(__MINGW32__)
-        ptr = _aligned_malloc(total_size, alignment);
-        if (ptr) {
-            memset(ptr, 0, total_size);
-        }
-#elif defined(__APPLE__) || defined(__linux__) || defined(__unix__) || defined(__posix__)
-        if (posix_memalign(&ptr, alignment, total_size) == 0) {
-            memset(ptr, 0, total_size);
-        } else {
-            ptr = NULL;
-        }
-#else
-        size_t aligned_size = (total_size + alignment - 1) & ~(alignment - 1);
-        ptr = aligned_alloc(alignment, aligned_size);
-        if (ptr) {
-            memset(ptr, 0, aligned_size);
-        }
-#endif
-    }
-    return ptr;
-}
-
-void obl_free(void *ptr)
-{
-    if (!ptr) {
-        return;
-    }
-#if defined(_MSC_VER) || defined(__MINGW32__)
-    _aligned_free(ptr);
-#else
-    free(ptr);
 #endif
 }

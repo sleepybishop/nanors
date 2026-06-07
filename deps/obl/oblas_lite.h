@@ -5,6 +5,7 @@
 #include <stddef.h>
 
 #include "gf2_8_tables.h"
+#include "oblas_common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,11 +23,6 @@ void oblas_get_impl(struct oblas_impl *impl);
 
 typedef uint8_t u8;
 typedef uint32_t u32;
-
-void obl_swap(u8 *a, u8 *b, unsigned k);
-
-void *obl_alloc(size_t num_rows, size_t row_size, size_t alignment);
-void obl_free(void *ptr);
 
 #ifdef __cplusplus
 }
