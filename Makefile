@@ -1,4 +1,4 @@
-OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o
+OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o deps/obl/oblas16.o
 
 TEST_UTILS=\
 t/00util/test\
