@@ -474,7 +474,20 @@ static inline void afft_process_block(uint16_t *f, int half, int block_start, in
 void oblas16_afft_fft(uint16_t *f, int log_n, int batch, uint8_t **needed, int chunk_idx, struct oblas16_impl *o16,
                       struct oblas16_afft_impl *afft)
 {
-    int SPLIT = 10;
+    int target_working_set = 2 * 1024 * 1024;
+    int split_blocks_limit = target_working_set / (batch * 2);
+    int SPLIT = 0;
+    if (split_blocks_limit > 1) {
+        int limit = split_blocks_limit;
+        while (limit > 1) {
+            SPLIT++;
+            limit >>= 1;
+        }
+    }
+    if (SPLIT > 10)
+        SPLIT = 10;
+    if (SPLIT < 2)
+        SPLIT = 2;
     if (log_n < SPLIT)
         SPLIT = log_n;
 
@@ -506,7 +519,20 @@ void oblas16_afft_fft(uint16_t *f, int log_n, int batch, uint8_t **needed, int c
 void oblas16_afft_ifft(uint16_t *f, int log_n, int batch, int max_input, int chunk_idx, struct oblas16_impl *o16,
                        struct oblas16_afft_impl *afft)
 {
-    int SPLIT = 10;
+    int target_working_set = 1024 * 1024;
+    int split_blocks_limit = target_working_set / (batch * 2);
+    int SPLIT = 0;
+    if (split_blocks_limit > 1) {
+        int limit = split_blocks_limit;
+        while (limit > 1) {
+            SPLIT++;
+            limit >>= 1;
+        }
+    }
+    if (SPLIT > 10)
+        SPLIT = 10;
+    if (SPLIT < 2)
+        SPLIT = 2;
     if (log_n < SPLIT)
         SPLIT = log_n;
 
