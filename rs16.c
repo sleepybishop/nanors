@@ -71,7 +71,7 @@ reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards)
     struct oblas16_impl impl;
     oblas16_get_impl(&impl);
 
-    reed_solomon16 *rs = calloc(1, sizeof(reed_solomon16));
+    reed_solomon16 *rs = (reed_solomon16 *)calloc(1, sizeof(reed_solomon16));
     rs->ds = data_shards;
     rs->ps = parity_shards;
     rs->ts = data_shards + parity_shards;
@@ -81,7 +81,7 @@ reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards)
     rs->align_size = impl.align_size;
 
     // Construct Cauchy parity matrix
-    rs->p = calloc(rs->ps * rs->ds, sizeof(uint16_t));
+    rs->p = (uint16_t *)calloc(rs->ps * rs->ds, sizeof(uint16_t));
     for (int j = 0; j < rs->ps; j++) {
         for (int i = 0; i < rs->ds; i++) {
             rs->p[j * rs->ds + i] = gf16_inv((rs->ps + i) ^ j);
@@ -149,7 +149,7 @@ int reed_solomon16_decode(reed_solomon16 *rs, uint16_t **shards, uint8_t *marks,
         return -1;
     }
 
-    uint16_t *decode_mat = calloc(rs->ds * rs->ds, sizeof(uint16_t));
+    uint16_t *decode_mat = (uint16_t *)calloc(rs->ds * rs->ds, sizeof(uint16_t));
     for (int i = 0; i < rs->ds; i++) {
         int r = surviving[i];
         if (r < rs->ds) {
@@ -162,7 +162,7 @@ int reed_solomon16_decode(reed_solomon16 *rs, uint16_t **shards, uint8_t *marks,
         }
     }
 
-    uint16_t *decode_mat_inv = calloc(rs->ds * rs->ds, sizeof(uint16_t));
+    uint16_t *decode_mat_inv = (uint16_t *)calloc(rs->ds * rs->ds, sizeof(uint16_t));
     if (invert_mat_gf16(decode_mat, decode_mat_inv, rs->ds) != 0) {
         free(decode_mat);
         free(decode_mat_inv);
