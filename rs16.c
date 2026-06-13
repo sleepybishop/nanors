@@ -80,7 +80,6 @@ reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards)
     rs->axiy = impl.axiy;
     rs->align_size = impl.align_size;
 
-    // Construct Cauchy parity matrix
     rs->p = (uint16_t *)calloc(rs->ps * rs->ds, sizeof(uint16_t));
     for (int j = 0; j < rs->ps; j++) {
         for (int i = 0; i < rs->ds; i++) {
