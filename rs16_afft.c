@@ -198,7 +198,6 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     ws->error_locations = (uint32_t *)ptr;
     ptr += sz_error_locations;
     ws->buf = (uint16_t *)ptr;
-    ptr += sz_buf;
 
     oblas16_get_impl(&ws->o16);
     oblas16_afft_get_impl(&ws->afft);
