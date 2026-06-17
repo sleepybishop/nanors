@@ -44,6 +44,23 @@ jobs:
         run: |
           make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check
 
+  ci-riscv64:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y qemu-user-static binfmt-support gcc-riscv64-linux-gnu libc6-dev-riscv64-cross
+
+      - name: Tests (RISCV64 Emulation)
+        env:
+          QEMU_LD_PREFIX: /usr/riscv64-linux-gnu
+        run: |
+          make CC=riscv64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -march=rv64gcv -mabi=lp64d -funroll-loops -ftree-vectorize" check
+
   ci-avx2:
     runs-on: ubuntu-latest
 

@@ -4,8 +4,12 @@
 #include "fft_twiddles.h"
 #include "oblas16.h"
 
+#if defined(OBLAS_ARCH_ARM) || defined(OBLAS_ARCH_X86) || (defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector))
 static uint8_t (*std_twiddles)[8][16];
+#endif
+#if defined(OBLAS_ARCH_X86)
 static uint64_t (*gfni_twiddles)[4];
+#endif
 
 #if defined(OBLAS_ARCH_X86)
 #include <immintrin.h>
@@ -371,6 +375,140 @@ OBLAS16_AFFT_GENERATE_IMPL_X2(avx512_gfni, __attribute__((target("avx512f,avx512
 OBLAS16_AFFT_GENERATE_IMPL_X2(neon, , uint16x8_t, VEC_LOAD_neon, VEC_STORE_neon, veorq_u16, VEC_MUL_INIT_neon, VEC_MUL_CORE_neon)
 #endif /* OBLAS_ARCH_ARM */
 
+#if defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector)
+#include <riscv_vector.h>
+
+static void oblas16_afft_bfly_fwd_rvv(u16 *p0, u16 *p1, u16 twist, unsigned batch)
+{
+    if (twist == 0) {
+        size_t vl;
+        for (unsigned i = 0; i < batch; i += vl) {
+            vl = __riscv_vsetvl_e16m1(batch - i);
+            vuint16m1_t v0 = __riscv_vle16_v_u16m1(p0 + i, vl);
+            vuint16m1_t v1 = __riscv_vle16_v_u16m1(p1 + i, vl);
+            vuint16m1_t h1 = __riscv_vxor_vv_u16m1(v0, v1, vl);
+            __riscv_vse16_v_u16m1(p1 + i, h1, vl);
+        }
+        return;
+    }
+
+    vuint8m1_t T0_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][0], 16);
+    vuint8m1_t T1_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][1], 16);
+    vuint8m1_t T2_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][2], 16);
+    vuint8m1_t T3_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][3], 16);
+    vuint8m1_t T0_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][4], 16);
+    vuint8m1_t T1_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][5], 16);
+    vuint8m1_t T2_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][6], 16);
+    vuint8m1_t T3_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][7], 16);
+
+    size_t vl;
+    for (unsigned i = 0; i < batch; i += vl) {
+        vl = __riscv_vsetvl_e8m1(batch - i);
+        vuint8m1_t v0_low = __riscv_vlse8_v_u8m1((const uint8_t *)(p0 + i), 2, vl);
+        vuint8m1_t v0_high = __riscv_vlse8_v_u8m1((const uint8_t *)(p0 + i) + 1, 2, vl);
+
+        vuint8m1_t v1_low = __riscv_vlse8_v_u8m1((const uint8_t *)(p1 + i), 2, vl);
+        vuint8m1_t v1_high = __riscv_vlse8_v_u8m1((const uint8_t *)(p1 + i) + 1, 2, vl);
+
+        vuint8m1_t input_l_l = __riscv_vand_vx_u8m1(v1_low, 0x0F, vl);
+        vuint8m1_t input_l_h = __riscv_vsrl_vx_u8m1(v1_low, 4, vl);
+        vuint8m1_t input_h_l = __riscv_vand_vx_u8m1(v1_high, 0x0F, vl);
+        vuint8m1_t input_h_h = __riscv_vsrl_vx_u8m1(v1_high, 4, vl);
+
+        vuint8m1_t prod_lo_0 = __riscv_vrgather_vv_u8m1(T0_lo, input_l_l, vl);
+        vuint8m1_t prod_lo_1 = __riscv_vrgather_vv_u8m1(T1_lo, input_l_h, vl);
+        vuint8m1_t prod_lo_2 = __riscv_vrgather_vv_u8m1(T2_lo, input_h_l, vl);
+        vuint8m1_t prod_lo_3 = __riscv_vrgather_vv_u8m1(T3_lo, input_h_h, vl);
+        vuint8m1_t res_low = __riscv_vxor_vv_u8m1(__riscv_vxor_vv_u8m1(prod_lo_0, prod_lo_1, vl),
+                                                  __riscv_vxor_vv_u8m1(prod_lo_2, prod_lo_3, vl), vl);
+
+        vuint8m1_t prod_hi_0 = __riscv_vrgather_vv_u8m1(T0_hi, input_l_l, vl);
+        vuint8m1_t prod_hi_1 = __riscv_vrgather_vv_u8m1(T1_hi, input_l_h, vl);
+        vuint8m1_t prod_hi_2 = __riscv_vrgather_vv_u8m1(T2_hi, input_h_l, vl);
+        vuint8m1_t prod_hi_3 = __riscv_vrgather_vv_u8m1(T3_hi, input_h_h, vl);
+        vuint8m1_t res_high = __riscv_vxor_vv_u8m1(__riscv_vxor_vv_u8m1(prod_hi_0, prod_hi_1, vl),
+                                                   __riscv_vxor_vv_u8m1(prod_hi_2, prod_hi_3, vl), vl);
+
+        vuint8m1_t h0_low = __riscv_vxor_vv_u8m1(v0_low, res_low, vl);
+        vuint8m1_t h0_high = __riscv_vxor_vv_u8m1(v0_high, res_high, vl);
+
+        vuint8m1_t h1_low = __riscv_vxor_vv_u8m1(h0_low, v1_low, vl);
+        vuint8m1_t h1_high = __riscv_vxor_vv_u8m1(h0_high, v1_high, vl);
+
+        __riscv_vsse8_v_u8m1((uint8_t *)(p0 + i), 2, h0_low, vl);
+        __riscv_vsse8_v_u8m1((uint8_t *)(p0 + i) + 1, 2, h0_high, vl);
+
+        __riscv_vsse8_v_u8m1((uint8_t *)(p1 + i), 2, h1_low, vl);
+        __riscv_vsse8_v_u8m1((uint8_t *)(p1 + i) + 1, 2, h1_high, vl);
+    }
+}
+
+static void oblas16_afft_bfly_inv_rvv(u16 *p0, u16 *p1, u16 twist, unsigned batch)
+{
+    if (twist == 0) {
+        size_t vl;
+        for (unsigned i = 0; i < batch; i += vl) {
+            vl = __riscv_vsetvl_e16m1(batch - i);
+            vuint16m1_t h0 = __riscv_vle16_v_u16m1(p0 + i, vl);
+            vuint16m1_t h1 = __riscv_vle16_v_u16m1(p1 + i, vl);
+            vuint16m1_t v1 = __riscv_vxor_vv_u16m1(h0, h1, vl);
+            __riscv_vse16_v_u16m1(p1 + i, v1, vl);
+        }
+        return;
+    }
+
+    vuint8m1_t T0_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][0], 16);
+    vuint8m1_t T1_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][1], 16);
+    vuint8m1_t T2_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][2], 16);
+    vuint8m1_t T3_lo = __riscv_vle8_v_u8m1(std_twiddles[twist][3], 16);
+    vuint8m1_t T0_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][4], 16);
+    vuint8m1_t T1_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][5], 16);
+    vuint8m1_t T2_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][6], 16);
+    vuint8m1_t T3_hi = __riscv_vle8_v_u8m1(std_twiddles[twist][7], 16);
+
+    size_t vl;
+    for (unsigned i = 0; i < batch; i += vl) {
+        vl = __riscv_vsetvl_e8m1(batch - i);
+        vuint8m1_t h0_low = __riscv_vlse8_v_u8m1((const uint8_t *)(p0 + i), 2, vl);
+        vuint8m1_t h0_high = __riscv_vlse8_v_u8m1((const uint8_t *)(p0 + i) + 1, 2, vl);
+
+        vuint8m1_t h1_low = __riscv_vlse8_v_u8m1((const uint8_t *)(p1 + i), 2, vl);
+        vuint8m1_t h1_high = __riscv_vlse8_v_u8m1((const uint8_t *)(p1 + i) + 1, 2, vl);
+
+        vuint8m1_t v1_low = __riscv_vxor_vv_u8m1(h0_low, h1_low, vl);
+        vuint8m1_t v1_high = __riscv_vxor_vv_u8m1(h0_high, h1_high, vl);
+
+        vuint8m1_t input_l_l = __riscv_vand_vx_u8m1(v1_low, 0x0F, vl);
+        vuint8m1_t input_l_h = __riscv_vsrl_vx_u8m1(v1_low, 4, vl);
+        vuint8m1_t input_h_l = __riscv_vand_vx_u8m1(v1_high, 0x0F, vl);
+        vuint8m1_t input_h_h = __riscv_vsrl_vx_u8m1(v1_high, 4, vl);
+
+        vuint8m1_t prod_lo_0 = __riscv_vrgather_vv_u8m1(T0_lo, input_l_l, vl);
+        vuint8m1_t prod_lo_1 = __riscv_vrgather_vv_u8m1(T1_lo, input_l_h, vl);
+        vuint8m1_t prod_lo_2 = __riscv_vrgather_vv_u8m1(T2_lo, input_h_l, vl);
+        vuint8m1_t prod_lo_3 = __riscv_vrgather_vv_u8m1(T3_lo, input_h_h, vl);
+        vuint8m1_t res_low = __riscv_vxor_vv_u8m1(__riscv_vxor_vv_u8m1(prod_lo_0, prod_lo_1, vl),
+                                                  __riscv_vxor_vv_u8m1(prod_lo_2, prod_lo_3, vl), vl);
+
+        vuint8m1_t prod_hi_0 = __riscv_vrgather_vv_u8m1(T0_hi, input_l_l, vl);
+        vuint8m1_t prod_hi_1 = __riscv_vrgather_vv_u8m1(T1_hi, input_l_h, vl);
+        vuint8m1_t prod_hi_2 = __riscv_vrgather_vv_u8m1(T2_hi, input_h_l, vl);
+        vuint8m1_t prod_hi_3 = __riscv_vrgather_vv_u8m1(T3_hi, input_h_h, vl);
+        vuint8m1_t res_high = __riscv_vxor_vv_u8m1(__riscv_vxor_vv_u8m1(prod_hi_0, prod_hi_1, vl),
+                                                   __riscv_vxor_vv_u8m1(prod_hi_2, prod_hi_3, vl), vl);
+
+        vuint8m1_t v0_low = __riscv_vxor_vv_u8m1(h0_low, res_low, vl);
+        vuint8m1_t v0_high = __riscv_vxor_vv_u8m1(h0_high, res_high, vl);
+
+        __riscv_vsse8_v_u8m1((uint8_t *)(p0 + i), 2, v0_low, vl);
+        __riscv_vsse8_v_u8m1((uint8_t *)(p0 + i) + 1, 2, v0_high, vl);
+
+        __riscv_vsse8_v_u8m1((uint8_t *)(p1 + i), 2, v1_low, vl);
+        __riscv_vsse8_v_u8m1((uint8_t *)(p1 + i) + 1, 2, v1_high, vl);
+    }
+}
+#endif
+
 void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
 {
     impl->bfly_fwd = oblas16_afft_bfly_fwd_ref;
@@ -407,6 +545,10 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
     impl->bfly_fwd = oblas16_afft_bfly_fwd_neon;
     impl->bfly_inv = oblas16_afft_bfly_inv_neon;
     impl->align_size = 16;
+#elif defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector)
+    impl->bfly_fwd = oblas16_afft_bfly_fwd_rvv;
+    impl->bfly_inv = oblas16_afft_bfly_inv_rvv;
+    impl->align_size = 16;
 #endif
 }
 
@@ -431,7 +573,7 @@ void oblas16_afft_init(void)
                                  std_twiddles[i][4], std_twiddles[i][5], std_twiddles[i][6], std_twiddles[i][7]);
         }
     }
-#elif defined(OBLAS_ARCH_ARM)
+#elif defined(OBLAS_ARCH_ARM) || (defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector))
     std_twiddles = (uint8_t (*)[8][16])obl_alloc(65536, 128, 64);
     for (int i = 0; i < 65536; i++) {
         for (int j = 0; j < 16; j++) {

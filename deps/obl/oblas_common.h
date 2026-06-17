@@ -8,6 +8,8 @@
 #define OBLAS_ARCH_X86 1
 #elif defined(__aarch64__) || defined(_M_ARM64) || defined(__arm__) || defined(_M_ARM)
 #define OBLAS_ARCH_ARM 1
+#elif defined(__riscv)
+#define OBLAS_ARCH_RISCV 1
 #endif
 
 #ifdef __cplusplus
