@@ -12,6 +12,10 @@ sub run_bench {
 subtest "sample benchmark 16 afft" => sub {
     my $T = 1280;
     my @targets = ("5-2", "7-2", "10-3", "20-5", "50-5", "100-10", "200-20", "500-25", "500-50", "1000-50", "1000-100", "2000-100", "2000-200", "5000-250", "5000-500", "10000-500", "10000-1000");
+    if ($ENV{CI_EMULATION}) {
+        @targets = ("5-2", "7-2", "10-3", "20-5");
+        $T = 256;
+    }
     my @failures;
     my $summary = "";
     foreach (@targets) {

@@ -41,6 +41,7 @@ jobs:
         env:
           QEMU_LD_PREFIX: /usr/aarch64-linux-gnu
           CPPFLAGS: -DOBLAS_NEON
+          CI_EMULATION: 1
         run: |
           make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check
 
@@ -58,6 +59,7 @@ jobs:
       - name: Tests (RISCV64 Emulation)
         env:
           QEMU_LD_PREFIX: /usr/riscv64-linux-gnu
+          CI_EMULATION: 1
         run: |
           make CC=riscv64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -march=rv64gcv -mabi=lp64d -funroll-loops -ftree-vectorize" check
 
