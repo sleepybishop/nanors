@@ -37,10 +37,12 @@ t/00util/bench16: t/00util/bench16.o $(OBJ)
 
 t/00util/bench16_afft: t/00util/bench16_afft.o $(OBJ)
 
+RUN ?=
+
 check: clean $(TEST_UTILS)
-	prove -I. -v t/*.t
-	./t/00util/test16
-	./t/00util/test16_afft
+	RUN="$(RUN)" prove -I. -v t/*.t
+	$(RUN) ./t/00util/test16
+	$(RUN) ./t/00util/test16_afft
 
 clean:
 	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o
@@ -64,5 +66,5 @@ gperf: clean t/00util/bench
 check-asan: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
 check-asan: LDLIBS += -fsanitize=address,undefined
 check-asan: clean $(TEST_UTILS)
-	prove -I. -v t/*.t
-	./t/00util/test16
+	RUN="$(RUN)" prove -I. -v t/*.t
+	$(RUN) ./t/00util/test16

@@ -36,6 +36,9 @@ sub md5_file {
 
 sub run_prog {
     my $cmd = shift;
+    if ($ENV{RUN}) {
+        $cmd = "$ENV{RUN} $cmd";
+    }
     my ($tempfh, $tempfn) = tempfile(UNLINK => 1);
     my $stderr = `$cmd 2>&1 > $tempfn`;
     my $stdout = do { local $/; <$tempfh> };
