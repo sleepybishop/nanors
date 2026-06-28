@@ -11,6 +11,7 @@
 
 #include "rs.h"
 #include "oblas_lite.h"
+#include "gf2_8_mul_table.h"
 
 #define MAP(x, max_x, m, n) (m + x / (max_x / (n - m) + 1))
 
@@ -29,6 +30,199 @@ static int verify_buffers(uint8_t **orig, uint8_t **reconstructed, int K, int T)
         }
     }
     return 1;
+}
+
+/* Reference implementations for verification */
+static void ref_axpy(uint8_t *a, uint8_t *b, uint8_t u, unsigned k)
+{
+    const uint8_t *u_row = &GF2_8_MUL[u << 8];
+    for (unsigned i = 0; i < k; i++) {
+        a[i] ^= u_row[b[i]];
+    }
+}
+
+static void ref_scal(uint8_t *a, uint8_t u, unsigned k)
+{
+    const uint8_t *u_row = &GF2_8_MUL[u << 8];
+    for (unsigned i = 0; i < k; i++) {
+        a[i] = u_row[a[i]];
+    }
+}
+
+static void ref_axiy(uint8_t *a, uint8_t *b, uint8_t u, unsigned k)
+{
+    const uint8_t *u_row = &GF2_8_MUL[u << 8];
+    for (unsigned i = 0; i < k; i++) {
+        a[i] = u_row[b[i]];
+    }
+}
+
+static void ref_axpyb32(uint8_t *a, uint32_t *b, uint8_t u, unsigned k)
+{
+    unsigned idx = 0, p = 0;
+    unsigned k_fast = k & ~31;
+    for (; idx < k_fast; idx += 32, p++) {
+        uint32_t tmp = b[p];
+        while (tmp > 0) {
+            unsigned tz = __builtin_ctz(tmp);
+            tmp = tmp & (tmp - 1);
+            a[tz + idx] ^= u;
+        }
+    }
+    if (idx < k) {
+        uint32_t tmp = b[p];
+        tmp &= (1U << (k - idx)) - 1;
+        while (tmp > 0) {
+            unsigned tz = __builtin_ctz(tmp);
+            tmp = tmp & (tmp - 1);
+            a[tz + idx] ^= u;
+        }
+    }
+}
+
+static void run_oblas_lite_tests(void)
+{
+    printf("[OBLAS LITE] Running oblas_lite SIMD vs Reference verification...\n");
+    struct oblas_impl impl;
+    oblas_get_impl(&impl);
+
+    /* Test a wide range of sizes to cover SIMD registers (16, 32, 64) and all tails/alignments */
+    for (int T = 1; T <= 256; T++) {
+        uint8_t *buf_ref = reed_solomon_aligned_alloc(T);
+        uint8_t *buf_opt = reed_solomon_aligned_alloc(T);
+        uint8_t *buf_b = reed_solomon_aligned_alloc(T);
+        int b_u32_len = (T + 31) / 32;
+        uint32_t *buf_b32 = calloc(b_u32_len, sizeof(uint32_t));
+
+        assert(buf_ref && buf_opt && buf_b && buf_b32);
+
+        /* Test with different u values (including 0, 1, and random values) */
+        uint8_t u_values[] = {0, 1, 2, 17, 128, 255};
+        int num_u = sizeof(u_values) / sizeof(u_values[0]);
+
+        for (int ui = 0; ui < num_u; ui++) {
+            uint8_t u = u_values[ui];
+
+            /* 1. Test axpy */
+            for (int i = 0; i < T; i++) {
+                buf_ref[i] = buf_opt[i] = rand() % 256;
+                buf_b[i] = rand() % 256;
+            }
+            ref_axpy(buf_ref, buf_b, u, T);
+            impl.axpy(buf_opt, buf_b, u, T);
+            for (int i = 0; i < T; i++) {
+                if (buf_ref[i] != buf_opt[i]) {
+                    printf("[OBLAS LITE] axpy mismatch at T=%d, u=%d, index=%d\n", T, u, i);
+                    exit(1);
+                }
+            }
+
+            /* 2. Test scal */
+            for (int i = 0; i < T; i++) {
+                buf_ref[i] = buf_opt[i] = rand() % 256;
+            }
+            ref_scal(buf_ref, u, T);
+            impl.scal(buf_opt, u, T);
+            for (int i = 0; i < T; i++) {
+                if (buf_ref[i] != buf_opt[i]) {
+                    printf("[OBLAS LITE] scal mismatch at T=%d, u=%d, index=%d\n", T, u, i);
+                    exit(1);
+                }
+            }
+
+            /* 3. Test axiy */
+            for (int i = 0; i < T; i++) {
+                buf_ref[i] = buf_opt[i] = rand() % 256;
+                buf_b[i] = rand() % 256;
+            }
+            ref_axiy(buf_ref, buf_b, u, T);
+            impl.axiy(buf_opt, buf_b, u, T);
+            for (int i = 0; i < T; i++) {
+                if (buf_ref[i] != buf_opt[i]) {
+                    printf("[OBLAS LITE] axiy mismatch at T=%d, u=%d, index=%d\n", T, u, i);
+                    exit(1);
+                }
+            }
+
+            /* 4. Test axpyb32 */
+            for (int i = 0; i < T; i++) {
+                buf_ref[i] = buf_opt[i] = rand() % 256;
+            }
+            for (int i = 0; i < b_u32_len; i++) {
+                buf_b32[i] = ((uint32_t)rand() << 16) | (uint32_t)rand();
+            }
+            ref_axpyb32(buf_ref, buf_b32, u, T);
+            impl.axpyb32(buf_opt, buf_b32, u, T);
+            for (int i = 0; i < T; i++) {
+                if (buf_ref[i] != buf_opt[i]) {
+                    printf("[OBLAS LITE] axpyb32 mismatch at T=%d, u=%d, index=%d\n", T, u, i);
+                    exit(1);
+                }
+            }
+        }
+
+        reed_solomon_free(buf_ref);
+        reed_solomon_free(buf_opt);
+        reed_solomon_free(buf_b);
+        free(buf_b32);
+    }
+    printf("[OBLAS LITE] OK\n");
+}
+
+static void test_autovectorization(void)
+{
+    printf("[AUTOVECTORIZATION] Checking XOR loop throughput...\n");
+    struct oblas_impl impl;
+    oblas_get_impl(&impl);
+
+    /* Allocate a large enough buffer to get a stable measurement, e.g., 1 MB */
+    int T = 1024 * 1024;
+    uint8_t *a = reed_solomon_aligned_alloc(T);
+    uint8_t *b = reed_solomon_aligned_alloc(T);
+    assert(a && b);
+
+    memset(a, 0x5a, T);
+    memset(b, 0xa5, T);
+
+    /* Warm up */
+    impl.axpy(a, b, 1, T);
+
+    /* Measure time for multiple iterations */
+    int iterations = 1000;
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (int i = 0; i < iterations; i++) {
+        /* u = 1 triggers the simple XOR loop */
+        impl.axpy(a, b, 1, T);
+    }
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
+    double seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    double total_mb = (double)T * iterations / (1024.0 * 1024.0);
+    double mbps = total_mb / seconds;
+
+    printf("[AUTOVECTORIZATION] XOR loop throughput: %.2f MB/s\n", mbps);
+
+#if !defined(__sanitize_address__) && !defined(__SANITIZE_ADDRESS__)
+    /*
+     * If the loop is not vectorized (e.g. due to missing 'restrict' causing aliasing fears),
+     * the compiler is forced to generate a byte-by-byte scalar loop.
+     * A byte-by-byte loop typically achieves < 1000 MB/s, whereas a vectorized/word-parallelized
+     * loop achieves well over 5000 MB/s. We set a conservative threshold of 2000 MB/s.
+     */
+    if (mbps < 2000.0) {
+        printf("[AUTOVECTORIZATION] ERROR: XOR loop throughput is too low (%.2f MB/s < 2000 MB/s). "
+               "The loop may not be vectorized!\n",
+               mbps);
+        exit(1);
+    }
+#else
+    printf("[AUTOVECTORIZATION] Skipping performance threshold check under Sanitizers.\n");
+#endif
+
+    reed_solomon_free(a);
+    reed_solomon_free(b);
+    printf("[AUTOVECTORIZATION] OK\n");
 }
 
 // Runs a single RS encode/decode verification
@@ -300,7 +494,11 @@ int main(int argc, char *argv[])
     printf("=== RUNNING ROBUST CODEC TEST BATTERY ===\n");
     printf("Seed: %d\n", seed);
 
-    // Execute structured unit tests
+    /* Execute oblas_lite unit tests */
+    run_oblas_lite_tests();
+    test_autovectorization();
+
+    /* Execute structured unit tests */
     run_api_safety_tests();
     run_decoder_failure_tests();
     run_bounds_and_alignment_tests();
