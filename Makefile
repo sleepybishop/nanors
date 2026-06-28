@@ -39,10 +39,16 @@ t/00util/bench16_afft: t/00util/bench16_afft.o $(OBJ)
 
 RUN ?=
 
-check: clean $(TEST_UTILS)
+check: clean $(TEST_UTILS) check-vectorization
 	RUN="$(RUN)" prove -I. -v t/*.t
 	$(RUN) ./t/00util/test16
 	$(RUN) ./t/00util/test16_afft
+
+check-vectorization:
+	@echo "Checking for autovectorization..."
+	@($(CC) $(CPPFLAGS) $(CFLAGS) -fopt-info-vec -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
+	 ($(CC) $(CPPFLAGS) $(CFLAGS) -Rpass=loop-vectorize -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
+	 (echo "ERROR: Loop was not autovectorized!" && exit 1)
 
 clean:
 	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o

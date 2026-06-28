@@ -169,62 +169,6 @@ static void run_oblas_lite_tests(void)
     printf("[OBLAS LITE] OK\n");
 }
 
-static void test_autovectorization(void)
-{
-    printf("[AUTOVECTORIZATION] Checking XOR loop throughput...\n");
-    struct oblas_impl impl;
-    oblas_get_impl(&impl);
-
-    /* Allocate a large enough buffer to get a stable measurement, e.g., 1 MB */
-    int T = 1024 * 1024;
-    uint8_t *a = reed_solomon_aligned_alloc(T);
-    uint8_t *b = reed_solomon_aligned_alloc(T);
-    assert(a && b);
-
-    memset(a, 0x5a, T);
-    memset(b, 0xa5, T);
-
-    /* Warm up */
-    impl.axpy(a, b, 1, T);
-
-    /* Measure time for multiple iterations */
-    int iterations = 1000;
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    for (int i = 0; i < iterations; i++) {
-        /* u = 1 triggers the simple XOR loop */
-        impl.axpy(a, b, 1, T);
-    }
-    clock_gettime(CLOCK_MONOTONIC, &end);
-
-    double seconds = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-    double total_mb = (double)T * iterations / (1024.0 * 1024.0);
-    double mbps = total_mb / seconds;
-
-    printf("[AUTOVECTORIZATION] XOR loop throughput: %.2f MB/s\n", mbps);
-
-#if !defined(__sanitize_address__) && !defined(__SANITIZE_ADDRESS__)
-    /*
-     * If the loop is not vectorized (e.g. due to missing 'restrict' causing aliasing fears),
-     * the compiler is forced to generate a byte-by-byte scalar loop.
-     * A byte-by-byte loop typically achieves < 1000 MB/s, whereas a vectorized/word-parallelized
-     * loop achieves well over 5000 MB/s. We set a conservative threshold of 2000 MB/s.
-     */
-    if (mbps < 2000.0) {
-        printf("[AUTOVECTORIZATION] ERROR: XOR loop throughput is too low (%.2f MB/s < 2000 MB/s). "
-               "The loop may not be vectorized!\n",
-               mbps);
-        exit(1);
-    }
-#else
-    printf("[AUTOVECTORIZATION] Skipping performance threshold check under Sanitizers.\n");
-#endif
-
-    reed_solomon_free(a);
-    reed_solomon_free(b);
-    printf("[AUTOVECTORIZATION] OK\n");
-}
-
 // Runs a single RS encode/decode verification
 int test_codec_run(int K, int N, int T, int erasures_count, int seed)
 {
@@ -496,7 +440,6 @@ int main(int argc, char *argv[])
 
     /* Execute oblas_lite unit tests */
     run_oblas_lite_tests();
-    test_autovectorization();
 
     /* Execute structured unit tests */
     run_api_safety_tests();
