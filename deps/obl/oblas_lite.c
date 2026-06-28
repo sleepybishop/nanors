@@ -299,8 +299,8 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
     unsigned p = 0;
     for (; ap < ae; p++) {
         uint8x16_t bcast = vreinterpretq_u8_u32(vdupq_n_u32(b[p]));
-        uint8x16_t ret_lo = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_lo)));
-        uint8x16_t ret_hi = vceqzq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_hi)));
+        uint8x16_t ret_lo = vceqq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_lo)), vdupq_n_u8(0));
+        uint8x16_t ret_hi = vceqq_u8(vbicq_u8(cmpmask, vqtbl1q_u8(bcast, scatter_hi)), vdupq_n_u8(0));
         ret_lo = vandq_u8(ret_lo, up);
         ret_hi = vandq_u8(ret_hi, up);
         vst1q_u8(ap, veorq_u8(vld1q_u8(ap), ret_lo));
