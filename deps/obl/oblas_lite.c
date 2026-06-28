@@ -204,7 +204,7 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     __m512i *ap = (__m512i *)a;
     __m512i *ae = (__m512i *)(a + (k & ~63));
     __m512i scatter =
-        _mm512_set_epi32(0x03030303, 0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000, 0x03030303,
+        _mm512_set_epi32(0x07070707, 0x07070707, 0x06060606, 0x06060606, 0x05050505, 0x05050505, 0x04040404, 0x04040404, 0x03030303,
                          0x03030303, 0x02020202, 0x02020202, 0x01010101, 0x01010101, 0x00000000, 0x00000000);
     __m512i cmpmask =
         _mm512_set_epi32(0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010, 0x08040201, 0x80402010,
@@ -212,7 +212,8 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     __m512i up = _mm512_set1_epi8(u);
     unsigned p = 0;
     for (; ap < ae; p += 2, ap++) {
-        __m512i bcast = _mm512_set1_epi32(b[p]);
+        __m128i low = _mm_loadl_epi64((const __m128i *)(b + p));
+        __m512i bcast = _mm512_broadcastq_epi64(low);
         __m512i ret = _mm512_shuffle_epi8(bcast, scatter);
         ret = _mm512_andnot_si512(ret, cmpmask);
         __mmask64 tmp = _mm512_cmpeq_epi8_mask(ret, _mm512_setzero_si512());
