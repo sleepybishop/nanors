@@ -46,9 +46,13 @@ check: clean $(TEST_UTILS) check-vectorization
 
 check-vectorization:
 	@echo "Checking for autovectorization..."
-	@($(CC) $(CPPFLAGS) $(CFLAGS) -fopt-info-vec -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
-	 ($(CC) $(CPPFLAGS) $(CFLAGS) -Rpass=loop-vectorize -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
-	 (echo "ERROR: Loop was not autovectorized!" && exit 1)
+	@if $(CC) $(CPPFLAGS) $(CFLAGS) -dM -E - < /dev/null 2>&1 | grep -q "__riscv"; then \
+		echo "Skipping autovectorization check on RISC-V (using manual RVV intrinsics)."; \
+	else \
+		(($(CC) $(CPPFLAGS) $(CFLAGS) -fopt-info-vec -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
+		 ($(CC) $(CPPFLAGS) $(CFLAGS) -Rpass=loop-vectorize -c deps/obl/oblas_lite.c -o /dev/null 2>&1 | grep -q "vectorized") || \
+		 (echo "ERROR: Loop was not autovectorized!" && exit 1)); \
+	fi
 
 clean:
 	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o
