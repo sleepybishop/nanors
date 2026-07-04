@@ -8,7 +8,24 @@
 #include "gf2_8_affine_mat.h"
 #endif
 
-#include "gf2_8_mul_table.h"
+static uint8_t GF2_8_MUL[65536];
+static int gf2_8_mul_initialized = 0;
+
+static void oblas_lite_init(void)
+{
+    if (gf2_8_mul_initialized)
+        return;
+    for (int i = 0; i < 256; i++) {
+        for (int j = 0; j < 256; j++) {
+            if (i == 0 || j == 0) {
+                GF2_8_MUL[(i << 8) + j] = 0;
+            } else {
+                GF2_8_MUL[(i << 8) + j] = GF2_8_EXP[GF2_8_LOG[i] + GF2_8_LOG[j]];
+            }
+        }
+    }
+    gf2_8_mul_initialized = 1;
+}
 
 #if defined(OBLAS_TINY)
 static inline uint8_t gf2_8_mul(uint16_t a, uint16_t b)
@@ -401,6 +418,7 @@ static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
 
 void oblas_get_impl(struct oblas_impl *impl)
 {
+    oblas_lite_init();
     /* fallback */
     impl->axpy = obl_axpy_ref;
     impl->scal = obl_scal_ref_wrapper;
