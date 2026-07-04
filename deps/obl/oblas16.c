@@ -17,7 +17,7 @@ void oblas16_init(void)
     for (int i = 0; i < 65535; i++) {
         GF16_EXP[i] = val;
         GF16_LOG[val] = i;
-        val = (val << 1) ^ (-(val >> 15) & 0x1002d);
+        val = (val << 1) ^ (-(int32_t)(val >> 15) & 0x1002d);
     }
     GF16_EXP[65535] = GF16_EXP[0];
     GF16_LOG[0] = 0; // log(0) is undefined, just set to 0

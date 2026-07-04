@@ -36,7 +36,7 @@ static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 }
 
 #else
-static void obl_axpy_ref(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)
+static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 {
     register const u8 *u_row = &GF2_8_MUL[u << 8];
     register u8 *restrict ap = a;
@@ -110,7 +110,7 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
     } while (0)
 
 #define GENERATE_IMPL(suffix, attr, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR)                                    \
-    attr static void obl_axpy_##suffix(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)                                           \
+    attr static void obl_axpy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                             \
     {                                                                                                                              \
         if (u == 1) {                                                                                                              \
             u8 *restrict ap = a;                                                                                                   \
