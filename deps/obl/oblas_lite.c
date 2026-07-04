@@ -36,7 +36,7 @@ static void obl_axiy_ref(u8 *a, u8 *b, u8 u, unsigned k)
 }
 
 #else
-static void obl_axpy_ref(u8 *a, u8 *b, u8 u, unsigned k)
+static void obl_axpy_ref(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)
 {
     register const u8 *u_row = &GF2_8_MUL[u << 8];
     register u8 *restrict ap = a;
@@ -110,7 +110,7 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
     } while (0)
 
 #define GENERATE_IMPL(suffix, attr, VEC_TYPE, VEC_LOAD, VEC_STORE, VEC_INIT, VEC_CORE, VEC_XOR)                                    \
-    attr static void obl_axpy_##suffix(u8 *a, u8 *b, u8 u, unsigned k)                                             \
+    attr static void obl_axpy_##suffix(u8 *restrict a, u8 *restrict b, u8 u, unsigned k)                                           \
     {                                                                                                                              \
         if (u == 1) {                                                                                                              \
             u8 *restrict ap = a;                                                                                                   \
@@ -407,6 +407,10 @@ static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
     obl_axiy_ref(a, a, u, k);
 }
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4113)
+#endif
 void oblas_get_impl(struct oblas_impl *impl)
 {
     /* fallback */
@@ -472,5 +476,8 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->axiy = obl_axiy_rvv;
     impl->axpyb32 = obl_axpyb32_ref;
     impl->align_size = 16;
+#endif
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 }
