@@ -162,7 +162,7 @@ int reed_solomon_padded_size(int bs)
     struct oblas_impl impl;
     oblas_get_impl(&impl);
     if (impl.align_size > 1) {
-        return (bs + impl.align_size - 1) & ~(impl.align_size - 1);
+        return (int)((bs + impl.align_size - 1) & ~(impl.align_size - 1));
     }
     return bs;
 }
