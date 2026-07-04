@@ -13,7 +13,7 @@
 
 #include "rs.h"
 #include "oblas_lite.h"
-#include "gf2_8_mul_table.h"
+static uint8_t GF2_8_MUL[65536];
 
 #define MAP(x, max_x, m, n) (m + x / (max_x / (n - m) + 1))
 
@@ -431,6 +431,15 @@ static void run_mds_property_tests(void)
 
 int main(int argc, char *argv[])
 {
+    for (int i = 0; i < 256; i++) {
+        for (int j = 0; j < 256; j++) {
+            if (i == 0 || j == 0) {
+                GF2_8_MUL[(i << 8) + j] = 0;
+            } else {
+                GF2_8_MUL[(i << 8) + j] = GF2_8_EXP[GF2_8_LOG[i] + GF2_8_LOG[j]];
+            }
+        }
+    }
     int seed = time(NULL);
     if (argc == 2) {
         seed = strtol(argv[1], NULL, 10);

@@ -1,7 +1,12 @@
 #include "oblas16_afft.h"
 #include "rs16.h"
 #include <string.h>
-#include "fft_twiddles.h"
+static uint16_t fft_twiddles[16][32768];
+static int fft_twiddles_initialized = 0;
+
+static const uint16_t CANTOR_BASIS[16] = {0x0001, 0xacca, 0x3c0e, 0x163e, 0x4378, 0x029c, 0x0188, 0x007e,
+                                          0x0426, 0x0022, 0x000c, 0x0092, 0x0012, 0x0006, 0x0002, 0x0800};
+
 #include "oblas16.h"
 
 #if defined(OBLAS_ARCH_ARM) || defined(OBLAS_ARCH_X86) || (defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector))
@@ -562,6 +567,37 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
 #endif
 }
 
+static void oblas16_afft_init_twiddles(void)
+{
+    if (fft_twiddles_initialized)
+        return;
+
+    uint16_t recur_val[16][16];
+    for (int r = 0; r < 16; r++) {
+        recur_val[0][r] = CANTOR_BASIS[r];
+    }
+    for (int k = 1; k < 16; k++) {
+        for (int r = 0; r < 16 - k; r++) {
+            uint16_t prev = recur_val[k - 1][r + 1];
+            recur_val[k][r] = gf16_mul(prev, prev) ^ prev;
+        }
+    }
+
+    for (int k = 0; k < 16; k++) {
+        int max_b = 1 << (15 - k);
+        for (int b = 0; b < max_b; b++) {
+            uint16_t val = 0;
+            for (int j = 0; j < 15 - k; j++) {
+                if ((b >> j) & 1) {
+                    val ^= recur_val[k][j + 1];
+                }
+            }
+            fft_twiddles[k][b] = val;
+        }
+    }
+    fft_twiddles_initialized = 1;
+}
+
 static int afft_impl_initialized = 0;
 
 void oblas16_afft_init(void)
@@ -570,6 +606,7 @@ void oblas16_afft_init(void)
         return;
 
     oblas16_init();
+    oblas16_afft_init_twiddles();
 #if defined(OBLAS_ARCH_X86)
     if (__builtin_cpu_supports("gfni")) {
         gfni_twiddles = (uint64_t (*)[4])obl_alloc(65536, 32, 64);
