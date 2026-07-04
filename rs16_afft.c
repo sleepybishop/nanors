@@ -114,6 +114,8 @@ struct afft_workspace {
     uint8_t *is_erased;
     uint32_t *error_locations;
     uint16_t *buf;
+    int *erasures;
+    int *E;
     void *flat_alloc;
     void (*axpy)(uint16_t *a, const uint16_t *b, uint16_t u, unsigned k);
     void (*axiy)(uint16_t *dst, const uint16_t *src, uint16_t twist, unsigned batch);
@@ -159,6 +161,8 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     size_t sz_is_erased = N * sizeof(uint8_t);
     size_t sz_error_locations = 65536 * sizeof(uint32_t);
     size_t sz_buf = N * BATCH_SIZE * sizeof(uint16_t);
+    size_t sz_erasures = 65536 * sizeof(int);
+    size_t sz_E = 65536 * sizeof(int);
 
     sz_chunk_buf = (sz_chunk_buf + 63) & ~63;
     sz_needed_buf = (sz_needed_buf + 63) & ~63;
@@ -169,9 +173,11 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     sz_is_erased = (sz_is_erased + 63) & ~63;
     sz_error_locations = (sz_error_locations + 63) & ~63;
     sz_buf = (sz_buf + 63) & ~63;
+    sz_erasures = (sz_erasures + 63) & ~63;
+    sz_E = (sz_E + 63) & ~63;
 
     size_t total_size = sz_chunk_buf + sz_needed_buf + sz_acc + sz_tmp_buf + sz_L_eval + sz_inv_Lp_eval + sz_is_erased +
-                        sz_error_locations + sz_buf;
+                        sz_error_locations + sz_buf + sz_erasures + sz_E;
 
     ws->flat_alloc = obl_alloc(1, total_size, 64);
     if (!ws->flat_alloc) {
@@ -198,6 +204,10 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     ws->error_locations = (uint32_t *)ptr;
     ptr += sz_error_locations;
     ws->buf = (uint16_t *)ptr;
+    ptr += sz_buf;
+    ws->erasures = (int *)ptr;
+    ptr += sz_erasures;
+    ws->E = (int *)ptr;
 
     oblas16_get_impl(&ws->o16);
     oblas16_afft_get_impl(&ws->afft);
@@ -262,7 +272,7 @@ int reed_solomon16_afft_encode(reed_solomon16_afft *rs, uint16_t **shards, int n
         uint16_t *acc = ws->acc;
         uint16_t *tmp_buf = ws->tmp_buf;
 
-        uint16_t *gamma_arr = (uint16_t *)obl_alloc(K / M + 1, sizeof(uint16_t), 1);
+        uint16_t *gamma_arr = (uint16_t *)calloc(K / M + 1, sizeof(uint16_t));
         for (int c = 0; c * M < K; c++) {
             gamma_arr[c] = oblas16_afft_compute_gamma(c, log_M, log_K_prime, log_N, K_prime / M);
         }
@@ -300,7 +310,7 @@ int reed_solomon16_afft_encode(reed_solomon16_afft *rs, uint16_t **shards, int n
                 memcpy(&shards[K + i][start], &acc[i * BATCH_SIZE], current_chunk * sizeof(uint16_t));
             }
         }
-        obl_free(gamma_arr);
+        free(gamma_arr);
     } else {
         /* original encoder for low rate / small n */
         for (int i = 0; i < P; i++) {
@@ -348,7 +358,7 @@ int reed_solomon16_afft_decode(reed_solomon16_afft *rs, uint16_t **shards, uint8
     int log_N = log2_int(N);
 
     /* find erasures */
-    int erasures[65535];
+    int *erasures = ws->erasures;
     int num_erasures = 0;
     for (int i = 0; i < K; i++) {
         if (marks[i])
@@ -367,7 +377,7 @@ int reed_solomon16_afft_decode(reed_solomon16_afft *rs, uint16_t **shards, uint8
         return -1; /* not enough shards */
 
     /* determine the complete set of evaluation points e that are considered erased. */
-    int E[65535];
+    int *E = ws->E;
     int num_E = 0;
 
     /* add missing data points */

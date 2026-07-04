@@ -272,6 +272,7 @@ OBLAS16_GENERATE_IMPL_X2(ssse3, __attribute__((target("ssse3"))), __m128i, _mm_l
 OBLAS16_GENERATE_IMPL_X2(ssse3_gfni, __attribute__((target("ssse3,gfni"))), __m128i, _mm_loadu_si128, _mm_storeu_si128,
                          _mm_xor_si128, VEC_MUL_INIT_ssse3_gfni, VEC_MUL_CORE_ssse3_gfni)
 
+#if !defined(_MSC_VER) || defined(__AVX2__)
 /* AVX2 */
 #define VEC_MUL_INIT_avx2()                                                                                                        \
     uint8_t t0l[16], t1l[16], t2l[16], t3l[16];                                                                                    \
@@ -330,6 +331,8 @@ OBLAS16_GENERATE_IMPL_X2(avx2, __attribute__((target("avx2"))), __m256i, _mm256_
 OBLAS16_GENERATE_IMPL_X2(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_loadu_si256, _mm256_storeu_si256,
                          _mm256_xor_si256, VEC_MUL_INIT_avx2_gfni, VEC_MUL_CORE_avx2_gfni)
 
+#endif
+#if !defined(_MSC_VER) || defined(__AVX512F__)
 /* AVX512 */
 #define VEC_MUL_INIT_avx512()                                                                                                      \
     uint8_t t0l[16], t1l[16], t2l[16], t3l[16];                                                                                    \
@@ -389,6 +392,7 @@ OBLAS16_GENERATE_IMPL_X2(avx512_gfni, __attribute__((target("avx512f,avx512bw,av
                          _mm512_loadu_si512, _mm512_storeu_si512, _mm512_xor_si512, VEC_MUL_INIT_avx512_gfni,
                          VEC_MUL_CORE_avx512_gfni)
 
+#endif
 #endif // OBLAS_ARCH_X86
 
 #if defined(OBLAS_ARCH_ARM) && defined(__ARM_NEON)
@@ -563,6 +567,7 @@ void oblas16_get_impl(struct oblas16_impl *impl)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
+#if !defined(_MSC_VER) || defined(__AVX512F__)
     if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
         impl->axpy = oblas16_axpy_avx512_gfni;
         impl->scal = oblas16_scal_avx512_gfni;
@@ -573,7 +578,10 @@ void oblas16_get_impl(struct oblas16_impl *impl)
         impl->scal = oblas16_scal_avx512;
         impl->axiy = oblas16_axiy_avx512;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+#if !defined(_MSC_VER) || defined(__AVX2__)
+        if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
         impl->axpy = oblas16_axpy_avx2_gfni;
         impl->scal = oblas16_scal_avx2_gfni;
         impl->axiy = oblas16_axiy_avx2_gfni;
@@ -583,7 +591,9 @@ void oblas16_get_impl(struct oblas16_impl *impl)
         impl->scal = oblas16_scal_avx2;
         impl->axiy = oblas16_axiy_avx2;
         impl->align_size = 32;
-    } else if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+        if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
         impl->axpy = oblas16_axpy_ssse3_gfni;
         impl->scal = oblas16_scal_ssse3_gfni;
         impl->axiy = oblas16_axiy_ssse3_gfni;
@@ -615,6 +625,7 @@ void oblas16_get_impl_by_name(struct oblas16_impl *impl, const char *name)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
+#if !defined(_MSC_VER) || defined(__AVX512F__)
     if (strcmp(name, "avx512_gfni") == 0) {
         impl->axpy = oblas16_axpy_avx512_gfni;
         impl->scal = oblas16_scal_avx512_gfni;
@@ -625,7 +636,10 @@ void oblas16_get_impl_by_name(struct oblas16_impl *impl, const char *name)
         impl->scal = oblas16_scal_avx512;
         impl->axiy = oblas16_axiy_avx512;
         impl->align_size = 64;
-    } else if (strcmp(name, "avx2_gfni") == 0) {
+    } else
+#endif
+#if !defined(_MSC_VER) || defined(__AVX2__)
+        if (strcmp(name, "avx2_gfni") == 0) {
         impl->axpy = oblas16_axpy_avx2_gfni;
         impl->scal = oblas16_scal_avx2_gfni;
         impl->axiy = oblas16_axiy_avx2_gfni;
@@ -635,7 +649,9 @@ void oblas16_get_impl_by_name(struct oblas16_impl *impl, const char *name)
         impl->scal = oblas16_scal_avx2;
         impl->axiy = oblas16_axiy_avx2;
         impl->align_size = 32;
-    } else if (strcmp(name, "ssse3_gfni") == 0) {
+    } else
+#endif
+        if (strcmp(name, "ssse3_gfni") == 0) {
         impl->axpy = oblas16_axpy_ssse3_gfni;
         impl->scal = oblas16_scal_ssse3_gfni;
         impl->axiy = oblas16_axiy_ssse3_gfni;

@@ -228,6 +228,7 @@ OBLAS16_AFFT_GENERATE_IMPL_X2(ssse3, __attribute__((target("ssse3"))), __m128i, 
 OBLAS16_AFFT_GENERATE_IMPL_X2(ssse3_gfni, __attribute__((target("ssse3,gfni"))), __m128i, _mm_loadu_si128, _mm_storeu_si128,
                               _mm_xor_si128, VEC_MUL_INIT_ssse3_gfni, VEC_MUL_CORE_ssse3_gfni)
 
+#if !defined(_MSC_VER) || defined(__AVX2__)
 /* AVX2 */
 #define VEC_MUL_INIT_avx2()                                                                                                        \
     __m256i T0_lo = _mm256_broadcastsi128_si256(_mm_loadu_si128((__m128i *)std_twiddles[twist][0]));                               \
@@ -281,6 +282,8 @@ OBLAS16_AFFT_GENERATE_IMPL_X2(avx2, __attribute__((target("avx2"))), __m256i, _m
 OBLAS16_AFFT_GENERATE_IMPL_X2(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_loadu_si256, _mm256_storeu_si256,
                               _mm256_xor_si256, VEC_MUL_INIT_avx2_gfni, VEC_MUL_CORE_avx2_gfni)
 
+#endif
+#if !defined(_MSC_VER) || defined(__AVX512F__)
 /* AVX512 */
 #define VEC_MUL_INIT_avx512()                                                                                                      \
     __m512i T0_lo = _mm512_broadcast_i32x4(_mm_loadu_si128((__m128i *)std_twiddles[twist][0]));                                    \
@@ -335,6 +338,7 @@ OBLAS16_AFFT_GENERATE_IMPL_X2(avx512_gfni, __attribute__((target("avx512f,avx512
                               _mm512_loadu_si512, _mm512_storeu_si512, _mm512_xor_si512, VEC_MUL_INIT_avx512_gfni,
                               VEC_MUL_CORE_avx512_gfni)
 
+#endif
 #endif /* OBLAS_ARCH_X86 */
 
 #if defined(OBLAS_ARCH_ARM) && defined(__ARM_NEON)
@@ -516,6 +520,7 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
+#if !defined(_MSC_VER) || defined(__AVX512F__)
     if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx512_gfni;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx512_gfni;
@@ -524,7 +529,10 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx512;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx512;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+#if !defined(_MSC_VER) || defined(__AVX2__)
+        if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx2_gfni;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx2_gfni;
         impl->align_size = 32;
@@ -532,7 +540,9 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx2;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx2;
         impl->align_size = 32;
-    } else if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+        if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
         impl->bfly_fwd = oblas16_afft_bfly_fwd_ssse3_gfni;
         impl->bfly_inv = oblas16_afft_bfly_inv_ssse3_gfni;
         impl->align_size = 16;
@@ -743,7 +753,9 @@ uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N
         return (c == c_out) ? 1 : 0;
     int log_macro_ifft = log_K_prime - log_M;
     int log_macro_fft = log_N - log_M;
-    uint16_t arr[32768] = {0};
+    uint16_t *arr = (uint16_t *)obl_alloc(1, 32768 * sizeof(uint16_t), 64);
+    if (!arr)
+        return 0;
     arr[c] = 1;
     for (int k_macro = 0; k_macro < log_macro_ifft; k_macro++) {
         int k = k_macro + log_M;
@@ -763,5 +775,7 @@ uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N
             gamma_process_block(arr, half, b * step, fft_twiddles[k][b], 1);
         }
     }
-    return arr[c_out];
+    uint16_t ret = arr[c_out];
+    obl_free(arr);
+    return ret;
 }

@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 
 #include "rs16.h"
 
@@ -251,7 +253,11 @@ int main(int argc, char *argv[])
     run_mds_property_tests();
 
     printf("[RANDOM SEARCH] Running randomized codec iterations...\n");
-    for (int i = 0; i < 200; i++) {
+    int num_iterations = 200;
+    if (getenv("CI_EMULATION")) {
+        num_iterations = 20;
+    }
+    for (int i = 0; i < num_iterations; i++) {
         int K = MAP(rand(), RAND_MAX, 1, 50);
         int N = MAP(rand(), RAND_MAX, 1, 20);
         if ((K + N) > 255)

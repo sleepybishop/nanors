@@ -133,6 +133,7 @@ static void obl_axpyb32_ref(u8 *a, u32 *b, u8 u, unsigned k)
 
 #if defined(OBLAS_ARCH_X86)
 
+#if !defined(_MSC_VER) || defined(__AVX512F__)
 /* avx512 gfni */
 #define VEC_INIT_avx512_gfni() const __m512i u_mat = _mm512_set1_epi64(GF2_8_AFFINE_MAT[u])
 #define VEC_CORE_avx512_gfni(bx, res) __m512i res = _mm512_gf2p8affine_epi64_epi8(bx, u_mat, 0)
@@ -154,7 +155,9 @@ GENERATE_IMPL(avx512_gfni, __attribute__((target("avx512f,avx512bw,avx512dq,avx5
     __m512i res = _mm512_xor_si512(lo_##res, hi_##res)
 GENERATE_IMPL(avx512_std, __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))), __m512i, _mm512_loadu_si512,
               _mm512_storeu_si512, VEC_INIT_avx512_std, VEC_CORE_avx512_std, _mm512_xor_si512)
+#endif
 
+#if !defined(_MSC_VER) || defined(__AVX2__)
 /* avx2 gnfi */
 #define VEC_INIT_avx2_gfni() const __m256i u_mat = _mm256_set1_epi64x(GF2_8_AFFINE_MAT[u])
 #define VEC_CORE_avx2_gfni(bx, res) __m256i res = _mm256_gf2p8affine_epi64_epi8(bx, u_mat, 0)
@@ -176,6 +179,7 @@ GENERATE_IMPL(avx2_gfni, __attribute__((target("avx2,gfni"))), __m256i, _mm256_l
     __m256i res = _mm256_xor_si256(lo_##res, hi_##res)
 GENERATE_IMPL(avx2_std, __attribute__((target("avx2"))), __m256i, _mm256_loadu_si256, _mm256_storeu_si256, VEC_INIT_avx2_std,
               VEC_CORE_avx2_std, _mm256_xor_si256)
+#endif
 
 /* sse3 gfni */
 #define VEC_INIT_ssse3_gfni() const __m128i u_mat = _mm_set1_epi64x(GF2_8_AFFINE_MAT[u])
@@ -199,6 +203,7 @@ GENERATE_IMPL(ssse3_gfni, __attribute__((target("ssse3,gfni"))), __m128i, _mm_lo
 GENERATE_IMPL(ssse3_std, __attribute__((target("ssse3"))), __m128i, _mm_loadu_si128, _mm_storeu_si128, VEC_INIT_ssse3_std,
               VEC_CORE_ssse3_std, _mm_xor_si128)
 
+#if !defined(_MSC_VER) || defined(__AVX512F__)
 __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_axpyb32_avx512(u8 *a, u32 *b, u8 u, unsigned k)
 {
     __m512i *ap = (__m512i *)a;
@@ -222,7 +227,9 @@ __attribute__((target("avx512f,avx512bw,avx512dq,avx512vl"))) static void obl_ax
     }
     obl_axpyb32_ref((u8 *)ap, b + p, u, k & 63);
 }
+#endif
 
+#if !defined(_MSC_VER) || defined(__AVX2__)
 __attribute__((target("avx2"))) static void obl_axpyb32_avx2(u8 *a, u32 *b, u8 u, unsigned k)
 {
     __m256i *ap = (__m256i *)a;
@@ -242,6 +249,7 @@ __attribute__((target("avx2"))) static void obl_axpyb32_avx2(u8 *a, u32 *b, u8 u
     }
     obl_axpyb32_ref((u8 *)ap, b + p, u, k & 31);
 }
+#endif
 
 __attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8 u, unsigned k)
 {
@@ -409,6 +417,7 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
+#if !defined(_MSC_VER) || defined(__AVX512F__)
     if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_avx512_gfni;
         impl->scal = obl_scal_avx512_gfni;
@@ -421,7 +430,10 @@ void oblas_get_impl(struct oblas_impl *impl)
         impl->axiy = obl_axiy_avx512_std;
         impl->axpyb32 = obl_axpyb32_avx512;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+#if !defined(_MSC_VER) || defined(__AVX2__)
+        if (__builtin_cpu_supports("avx2") && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_avx2_gfni;
         impl->scal = obl_scal_avx2_gfni;
         impl->axiy = obl_axiy_avx2_gfni;
@@ -433,7 +445,9 @@ void oblas_get_impl(struct oblas_impl *impl)
         impl->axiy = obl_axiy_avx2_std;
         impl->axpyb32 = obl_axpyb32_avx2;
         impl->align_size = 32;
-    } else if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
+    } else
+#endif
+        if (__builtin_cpu_supports("ssse3") && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_ssse3_gfni;
         impl->scal = obl_scal_ssse3_gfni;
         impl->axiy = obl_axiy_ssse3_gfni;

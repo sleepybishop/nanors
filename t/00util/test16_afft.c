@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifndef _MSC_VER
 #include <unistd.h>
+#endif
 
 #include "rs16.h"
 #include "rs16_afft.h"
@@ -245,7 +247,11 @@ int main(int argc, char *argv[])
     run_mds_property_tests();
 
     printf("[RANDOM SEARCH] Running randomized codec iterations...\n");
-    for (int i = 0; i < 200; i++) {
+    int num_iterations = 200;
+    if (getenv("CI_EMULATION")) {
+        num_iterations = 20;
+    }
+    for (int i = 0; i < num_iterations; i++) {
         int K = MAP(rand(), RAND_MAX, 1, 50);
         int N = MAP(rand(), RAND_MAX, 1, 20);
         if ((K + N) > 255)
@@ -264,7 +270,11 @@ int main(int argc, char *argv[])
     printf("[LARGE K] Running tests for big K...\n");
     int big_ks[] = {500, 1000, 2000, 5000, 10000};
     int losses[] = {5, 10};
-    for (int i = 0; i < sizeof(big_ks) / sizeof(big_ks[0]); i++) {
+    int num_big_ks = sizeof(big_ks) / sizeof(big_ks[0]);
+    if (getenv("CI_EMULATION")) {
+        num_big_ks = 2; /* Only test up to K=1000 under emulation */
+    }
+    for (int i = 0; i < num_big_ks; i++) {
         for (int j = 0; j < sizeof(losses) / sizeof(losses[0]); j++) {
             int K = big_ks[i];
             int N = (K * losses[j]) / 100;
