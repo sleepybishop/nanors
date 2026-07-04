@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "oblas_common.h"
 
 #define DATA_SHARDS_MAX 65535
 

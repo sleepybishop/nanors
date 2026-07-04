@@ -2,6 +2,9 @@
 #include "oblas_common.h"
 #include <stdlib.h>
 #include <string.h>
+#if defined(_MSC_VER) || defined(__MINGW32__)
+#include <malloc.h>
+#endif
 
 void obl_swap(uint8_t *a, uint8_t *b, unsigned k)
 {

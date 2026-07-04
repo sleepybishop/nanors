@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Dependencies
         run: |
@@ -27,29 +27,22 @@ jobs:
         run: make valgrind
 
   ci-arm64:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - name: Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y qemu-user-static binfmt-support gcc-aarch64-linux-gnu libc6-dev-arm64-cross
-
-      - name: Tests (ARM64 Emulation)
+      - name: Tests (ARM64 Native)
         env:
-          QEMU_LD_PREFIX: /usr/aarch64-linux-gnu
           CPPFLAGS: -DOBLAS_NEON
-          CI_EMULATION: 1
         run: |
-          make CC=aarch64-linux-gnu-gcc CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -funroll-loops -ftree-vectorize" check
+          make check
 
   ci-riscv64:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Dependencies
         run: |
@@ -67,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Tests (AVX2)
         run: make check CPPFLAGS="-DOBLAS_AVX2" CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -mavx2"
@@ -76,7 +69,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Download Intel SDE
         run: |
@@ -86,3 +79,22 @@ jobs:
 
       - name: Tests (AVX-512 Emulation)
         run: make RUN="sde64 -skx --" check CPPFLAGS="-DOBLAS_AVX512" CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -mavx512f -mavx512bw"
+
+  ci-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile (MSVC)
+        run: |
+          cl /c /O2 /W3 /I. /Ideps/obl rs.c rs16.c rs16_afft.c deps/obl/oblas_common.c deps/obl/oblas_lite.c deps/obl/oblas16.c deps/obl/oblas16_afft.c
+          cl t/00util/test.c rs.obj rs16.obj rs16_afft.obj oblas_common.obj oblas_lite.obj oblas16.obj oblas16_afft.obj /Fe:test.exe /I. /Ideps/obl
+          cl t/00util/test16.c rs.obj rs16.obj rs16_afft.obj oblas_common.obj oblas_lite.obj oblas16.obj oblas16_afft.obj /Fe:test16.exe /I. /Ideps/obl
+          cl t/00util/test16_afft.c rs.obj rs16.obj rs16_afft.obj oblas_common.obj oblas_lite.obj oblas16.obj oblas16_afft.obj /Fe:test16_afft.exe /I. /Ideps/obl
+          .\test.exe
+          .\test16.exe
+          .\test16_afft.exe
