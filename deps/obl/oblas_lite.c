@@ -289,6 +289,16 @@ __attribute__((target("ssse3"))) static void obl_axpyb32_ssse3(u8 *a, u32 *b, u8
 #if defined(OBLAS_ARCH_ARM) && (defined(__ARM_NEON) || defined(_MSC_VER))
 #include <arm_neon.h>
 
+#if !defined(__aarch64__) && !defined(_M_ARM64)
+static inline uint8x16_t vqtbl1q_u8(uint8x16_t tbl, uint8x16_t idx)
+{
+    uint8x8x2_t tbl2;
+    tbl2.val[0] = vget_low_u8(tbl);
+    tbl2.val[1] = vget_high_u8(tbl);
+    return vcombine_u8(vtbl2_u8(tbl2, vget_low_u8(idx)), vtbl2_u8(tbl2, vget_high_u8(idx)));
+}
+#endif
+
 #define VEC_INIT_neon()                                                                                                            \
     const u8 *u_lo = GF2_8_SHUF_LO + u * 16;                                                                                       \
     const u8 *u_hi = GF2_8_SHUF_HI + u * 16;                                                                                       \
