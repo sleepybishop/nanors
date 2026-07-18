@@ -439,6 +439,9 @@ static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
 void oblas_get_impl(struct oblas_impl *impl)
 {
     oblas_lite_init();
+#if defined(OBLAS_ARCH_X86) && !defined(_MSC_VER)
+    __builtin_cpu_init();
+#endif
     /* fallback */
     impl->axpy = obl_axpy_ref;
     impl->scal = obl_scal_ref_wrapper;
