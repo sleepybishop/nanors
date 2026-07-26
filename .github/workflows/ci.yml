@@ -78,6 +78,8 @@ jobs:
           echo "$PWD/sde-external-10.8.0-2026-03-15-lin" >> $GITHUB_PATH
 
       - name: Tests (AVX-512 Emulation)
+        env:
+          CI_EMULATION: 1
         run: make RUN="sde64 -skx --" check CPPFLAGS="-DOBLAS_AVX512" CFLAGS="-O3 -g -std=c11 -Wall -I. -Ideps/obl -mavx512f -mavx512bw"
 
   ci-windows:
