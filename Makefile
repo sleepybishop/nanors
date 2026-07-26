@@ -1,4 +1,4 @@
-OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o rs16.o deps/obl/oblas16.o rs16_afft.o deps/obl/oblas16_afft.o
+OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o rs16.o deps/obl/oblas16.o rs16_afft.o deps/obl/oblas16_afft.o rs_rlrs.o
 
 .PHONY: all check check-vectorization clean indent scan valgrind gperf check-asan
 
@@ -8,8 +8,10 @@ TEST_UTILS=\
 	t/00util/bench\
 	t/00util/test16\
 	t/00util/test16_afft\
+	t/00util/test_rlrs\
 	t/00util/bench16\
-	t/00util/bench16_afft
+	t/00util/bench16_afft\
+	t/00util/bench_all
 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
 CFLAGS  += -funroll-loops -ftree-vectorize -MMD -MP $(NATIVE_CFLAGS)
@@ -27,9 +29,13 @@ t/00util/test16.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
 t/00util/test16_afft.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
+t/00util/test_rlrs.o: CPPFLAGS+=-D_DEFAULT_SOURCE
+
 t/00util/bench16.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
 t/00util/bench16_afft.o: CPPFLAGS+=-D_DEFAULT_SOURCE
+
+t/00util/bench_all.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
 t/00util/test: t/00util/test.o $(OBJ)
 
@@ -41,9 +47,13 @@ t/00util/test16: t/00util/test16.o $(OBJ)
 
 t/00util/test16_afft: t/00util/test16_afft.o $(OBJ)
 
+t/00util/test_rlrs: t/00util/test_rlrs.o $(OBJ)
+
 t/00util/bench16: t/00util/bench16.o $(OBJ)
 
 t/00util/bench16_afft: t/00util/bench16_afft.o $(OBJ)
+
+t/00util/bench_all: t/00util/bench_all.o $(OBJ)
 
 RUN ?=
 
@@ -54,6 +64,7 @@ check: clean
 	$(RUN) ./t/00util/test_dispatch
 	$(RUN) ./t/00util/test16
 	$(RUN) ./t/00util/test16_afft
+	$(RUN) ./t/00util/test_rlrs
 
 check-vectorization:
 	@echo "Checking for autovectorization..."
