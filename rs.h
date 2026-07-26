@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include "oblas_common.h"
 
-#define DATA_SHARDS_MAX 255
+#define RS8_DATA_SHARDS_MAX 255
 
 #ifdef __cplusplus
 extern "C" {

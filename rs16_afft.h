@@ -2,10 +2,36 @@
 #define RS16_AFFT_H
 
 #include "rs16.h"
+#include "deps/obl/oblas16.h"
+#include "deps/obl/oblas16_afft.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#define BATCH_SIZE 512
+
+struct afft_workspace {
+    uint16_t *chunk_buf;
+    uint8_t *needed_buf;
+    uint16_t *acc;
+    uint16_t *tmp_buf;
+    uint16_t *L_eval;
+    uint16_t *inv_Lp_eval;
+    uint8_t *is_erased;
+    uint16_t *error_locations;
+    uint16_t *buf;
+    int *erasures;
+    int *E;
+    void *flat_alloc;
+    void (*axpy)(uint16_t *a, const uint16_t *b, uint16_t u, unsigned k);
+    void (*axiy)(uint16_t *dst, const uint16_t *src, uint16_t twist, unsigned batch);
+    struct oblas16_impl o16;
+    struct oblas16_afft_impl afft;
+};
+
+extern uint16_t LogWalsh[65536];
+void fwht_mod(uint16_t *restrict data, int n);
 
 typedef struct {
     int ds;

@@ -37,7 +37,7 @@ static int log2_int(int n)
 static uint16_t omegas[65536];
 static int omegas_initialized = 0;
 
-static uint32_t LogWalsh[65536];
+uint16_t LogWalsh[65536];
 
 #define FWHT_UNROLL_PASS(LEN)                                                                                                      \
     for (int i = 0; i < n; i += 2 * (LEN)) {                                                                                       \
@@ -51,7 +51,7 @@ static uint32_t LogWalsh[65536];
         }                                                                                                                          \
     }
 
-static void fwht_mod(uint32_t *data, int n)
+void fwht_mod(uint16_t *restrict data, int n)
 {
     if (n < 8)
         return;
@@ -62,13 +62,15 @@ static void fwht_mod(uint32_t *data, int n)
 
     for (int len = 8; len < n; len <<= 1) {
         for (int i = 0; i < n; i += 2 * len) {
+            uint16_t *restrict dp0 = &data[i];
+            uint16_t *restrict dp1 = &data[i + len];
             for (int j = 0; j < len; j++) {
-                uint32_t a = data[i + j];
-                uint32_t b = data[i + len + j];
+                uint32_t a = dp0[j];
+                uint32_t b = dp1[j];
                 uint32_t sum = a + b;
                 uint32_t diff = a + 65535 - b;
-                data[i + j] = sum >= 65535 ? sum - 65535 : sum;
-                data[i + len + j] = diff >= 65535 ? diff - 65535 : diff;
+                dp0[j] = sum >= 65535 ? sum - 65535 : sum;
+                dp1[j] = diff >= 65535 ? diff - 65535 : diff;
             }
         }
     }
@@ -101,31 +103,11 @@ void reed_solomon16_afft_init(void)
     omegas_initialized = 1;
 }
 
-#define BATCH_SIZE 512
-
 /* --- public apis: init, new, release, encode and decode --- */
-struct afft_workspace {
-    uint16_t *chunk_buf;
-    uint8_t *needed_buf;
-    uint16_t *acc;
-    uint16_t *tmp_buf;
-    uint16_t *L_eval;
-    uint16_t *inv_Lp_eval;
-    uint8_t *is_erased;
-    uint32_t *error_locations;
-    uint16_t *buf;
-    int *erasures;
-    int *E;
-    void *flat_alloc;
-    void (*axpy)(uint16_t *a, const uint16_t *b, uint16_t u, unsigned k);
-    void (*axiy)(uint16_t *dst, const uint16_t *src, uint16_t twist, unsigned batch);
-    struct oblas16_impl o16;
-    struct oblas16_afft_impl afft;
-};
 
 reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
 {
-    if (data_shards <= 0 || data_shards > DATA_SHARDS_MAX || parity_shards <= 0 || parity_shards > DATA_SHARDS_MAX)
+    if (data_shards <= 0 || data_shards > RS16_DATA_SHARDS_MAX || parity_shards <= 0 || parity_shards > RS16_DATA_SHARDS_MAX)
         return NULL;
 
     reed_solomon16_afft_init();
@@ -159,7 +141,7 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     size_t sz_L_eval = N * sizeof(uint16_t);
     size_t sz_inv_Lp_eval = N * sizeof(uint16_t);
     size_t sz_is_erased = N * sizeof(uint8_t);
-    size_t sz_error_locations = 65536 * sizeof(uint32_t);
+    size_t sz_error_locations = 65536 * sizeof(uint16_t);
     size_t sz_buf = N * BATCH_SIZE * sizeof(uint16_t);
     size_t sz_erasures = 65536 * sizeof(int);
     size_t sz_E = 65536 * sizeof(int);
@@ -201,7 +183,7 @@ reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
     ptr += sz_inv_Lp_eval;
     ws->is_erased = ptr;
     ptr += sz_is_erased;
-    ws->error_locations = (uint32_t *)ptr;
+    ws->error_locations = (uint16_t *)ptr;
     ptr += sz_error_locations;
     ws->buf = (uint16_t *)ptr;
     ptr += sz_buf;
@@ -398,10 +380,10 @@ int reed_solomon16_afft_decode(reed_solomon16_afft *rs, uint16_t **shards, uint8
     uint16_t *L_eval = ws->L_eval;
     uint16_t *inv_Lp_eval = ws->inv_Lp_eval;
     uint8_t *is_erased = ws->is_erased;
-    uint32_t *error_locations = ws->error_locations;
+    uint16_t *error_locations = ws->error_locations;
 
     memset(is_erased, 0, N * sizeof(uint8_t));
-    memset(error_locations, 0, 65536 * sizeof(uint32_t));
+    memset(error_locations, 0, 65536 * sizeof(uint16_t));
 
     for (int i = 0; i < num_E; i++) {
         is_erased[E[i]] = 1;
@@ -411,7 +393,7 @@ int reed_solomon16_afft_decode(reed_solomon16_afft *rs, uint16_t **shards, uint8
     fwht_mod(error_locations, 65536);
 
     for (int i = 0; i < 65536; i++) {
-        uint32_t x = error_locations[i] * LogWalsh[i];
+        uint32_t x = (uint32_t)error_locations[i] * LogWalsh[i];
         uint32_t s = (x >> 16) + (x & 65535);
         s = (s >> 16) + (s & 65535);
         error_locations[i] = (s >= 65535) ? s - 65535 : s;

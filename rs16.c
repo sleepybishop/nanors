@@ -63,7 +63,7 @@ void reed_solomon16_init(void)
 
 reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards)
 {
-    if (data_shards <= 0 || data_shards > DATA_SHARDS_MAX || parity_shards <= 0 || parity_shards > DATA_SHARDS_MAX)
+    if (data_shards <= 0 || data_shards > RS16_DATA_SHARDS_MAX || parity_shards <= 0 || parity_shards > RS16_DATA_SHARDS_MAX)
         return NULL;
 
     reed_solomon16_init();
@@ -125,8 +125,8 @@ int reed_solomon16_decode(reed_solomon16 *rs, uint16_t **shards, uint8_t *marks,
     }
 
     int gaps = 0;
-    uint16_t erasures[DATA_SHARDS_MAX];
-    uint16_t surviving[DATA_SHARDS_MAX];
+    uint16_t erasures[RS16_DATA_SHARDS_MAX];
+    uint16_t surviving[RS16_DATA_SHARDS_MAX];
 
     for (int i = 0; i < rs->ds; i++) {
         if (marks[i]) {

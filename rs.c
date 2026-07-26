@@ -101,7 +101,7 @@ reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
 
     reed_solomon *rs = (reed_solomon *)buf;
 
-    if (ds <= 0 || ds > DATA_SHARDS_MAX || ps <= 0 || ps > DATA_SHARDS_MAX || (ds + ps) > DATA_SHARDS_MAX)
+    if (ds <= 0 || ds > RS8_DATA_SHARDS_MAX || ps <= 0 || ps > RS8_DATA_SHARDS_MAX || (ds + ps) > RS8_DATA_SHARDS_MAX)
         return NULL;
 
     if (len < reed_solomon_bufsize(ds, ps))
@@ -131,7 +131,7 @@ reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)
 
 reed_solomon *reed_solomon_new(int ds, int ps)
 {
-    if (ds <= 0 || ds > DATA_SHARDS_MAX || ps <= 0 || ps > DATA_SHARDS_MAX || (ds + ps) > DATA_SHARDS_MAX)
+    if (ds <= 0 || ds > RS8_DATA_SHARDS_MAX || ps <= 0 || ps > RS8_DATA_SHARDS_MAX || (ds + ps) > RS8_DATA_SHARDS_MAX)
         return NULL;
 
     struct oblas_impl impl;
@@ -189,8 +189,8 @@ int reed_solomon_decode(reed_solomon *rs, u8 **data, u8 *marks, int nr_shards, i
         return -1;
 
     u8 *wrk = rs->p + 1 * rs->ps * rs->ds;
-    u8 erasures[DATA_SHARDS_MAX], colperm[DATA_SHARDS_MAX];
-    u8 gaps = 0, rowperm[DATA_SHARDS_MAX];
+    u8 erasures[RS8_DATA_SHARDS_MAX], colperm[RS8_DATA_SHARDS_MAX];
+    u8 gaps = 0, rowperm[RS8_DATA_SHARDS_MAX];
 
     for (int i = 0; i < rs->ds; i++)
         if (marks[i])
