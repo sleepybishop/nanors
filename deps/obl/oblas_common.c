@@ -6,6 +6,10 @@
 #include <malloc.h>
 #endif
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 void obl_swap(uint8_t *a, uint8_t *b, unsigned k)
 {
     register uint8_t *ap = a, *ae = &a[k], *bp = b;
@@ -21,9 +25,18 @@ void *obl_alloc(size_t num_rows, size_t row_size, size_t alignment)
     if (num_rows == 0 || row_size == 0) {
         return NULL;
     }
+    if (alignment > 1 && (alignment & (alignment - 1)) != 0) {
+        return NULL;
+    }
     size_t stride = row_size;
     if (alignment > 1) {
+        if (row_size > SIZE_MAX - (alignment - 1)) {
+            return NULL;
+        }
         stride = (row_size + alignment - 1) & ~(alignment - 1);
+    }
+    if (num_rows > SIZE_MAX / stride) {
+        return NULL;
     }
     size_t total_size = num_rows * stride;
 

@@ -17,6 +17,7 @@ struct oblas16_afft_impl {
 };
 
 void oblas16_afft_init(void);
+int oblas16_afft_is_initialized(void);
 void oblas16_afft_get_impl(struct oblas16_afft_impl *impl);
 
 struct oblas16_impl;
@@ -25,6 +26,8 @@ void oblas16_afft_fft(uint16_t *f, int log_n, int batch, uint8_t **needed, int c
 void oblas16_afft_ifft(uint16_t *f, int log_n, int batch, int max_input, int chunk_idx, struct oblas16_impl *o16,
                        struct oblas16_afft_impl *afft);
 uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N, int c_out);
+uint16_t oblas16_afft_compute_gamma_with_scratch(int c, int log_M, int log_K_prime, int log_N, int c_out, uint16_t *scratch,
+                                                 size_t scratch_len);
 
 #ifdef __cplusplus
 }

@@ -1,3 +1,7 @@
+#ifdef __cplusplus
+#define register
+#endif
+
 #include "oblas_lite.h"
 #include <stdlib.h>
 #include <string.h>
@@ -320,9 +324,10 @@ static void obl_axpyb32_neon(u8 *a, u32 *b, u8 u, unsigned k)
     uint8_t *ap = (uint8_t *)a;
     uint8_t *ae = (uint8_t *)(a + (k & ~31));
 #ifdef _MSC_VER
-    const uint8x16_t scatter_hi = {.n128_u8 ={ 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3}};
-    const uint8x16_t scatter_lo = {.n128_u8 ={0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
-    const uint8x16_t cmpmask = {.n128_u8 = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}};
+    const uint8x16_t scatter_hi = {.n128_u8 = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3}};
+    const uint8x16_t scatter_lo = {.n128_u8 = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1}};
+    const uint8x16_t cmpmask = {
+        .n128_u8 = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80}};
 #else
     const uint8x16_t scatter_hi = {2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3};
     const uint8x16_t scatter_lo = {0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -434,7 +439,7 @@ static void obl_scal_ref_wrapper(u8 *a, u8 u, unsigned k)
 
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 4113)
+#pragma warning(disable : 4113)
 #endif
 void oblas_get_impl(struct oblas_impl *impl)
 {
@@ -450,13 +455,15 @@ void oblas_get_impl(struct oblas_impl *impl)
     impl->align_size = sizeof(void *);
 
 #if defined(OBLAS_ARCH_X86)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
+    int has_avx512 = __builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") &&
+                     __builtin_cpu_supports("avx512dq") && __builtin_cpu_supports("avx512vl");
+    if (has_avx512 && __builtin_cpu_supports("gfni")) {
         impl->axpy = obl_axpy_avx512_gfni;
         impl->scal = obl_scal_avx512_gfni;
         impl->axiy = obl_axiy_avx512_gfni;
         impl->axpyb32 = obl_axpyb32_avx512;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx512f")) {
+    } else if (has_avx512) {
         impl->axpy = obl_axpy_avx512_std;
         impl->scal = obl_scal_avx512_std;
         impl->axiy = obl_axiy_avx512_std;

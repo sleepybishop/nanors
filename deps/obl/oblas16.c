@@ -568,12 +568,15 @@ void oblas16_get_impl(struct oblas16_impl *impl)
 
 #if defined(OBLAS_ARCH_X86)
 #if !defined(_MSC_VER) || defined(__AVX512F__)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
+    if ((__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512dq") &&
+         __builtin_cpu_supports("avx512vl")) &&
+        __builtin_cpu_supports("gfni")) {
         impl->axpy = oblas16_axpy_avx512_gfni;
         impl->scal = oblas16_scal_avx512_gfni;
         impl->axiy = oblas16_axiy_avx512_gfni;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx512f")) {
+    } else if ((__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512dq") &&
+                __builtin_cpu_supports("avx512vl"))) {
         impl->axpy = oblas16_axpy_avx512;
         impl->scal = oblas16_scal_avx512;
         impl->axiy = oblas16_axiy_avx512;

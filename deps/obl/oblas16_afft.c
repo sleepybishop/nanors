@@ -526,11 +526,14 @@ void oblas16_afft_get_impl(struct oblas16_afft_impl *impl)
 
 #if defined(OBLAS_ARCH_X86)
 #if !defined(_MSC_VER) || defined(__AVX512F__)
-    if (__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("gfni")) {
+    if ((__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512dq") &&
+         __builtin_cpu_supports("avx512vl")) &&
+        __builtin_cpu_supports("gfni")) {
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx512_gfni;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx512_gfni;
         impl->align_size = 64;
-    } else if (__builtin_cpu_supports("avx512f")) {
+    } else if ((__builtin_cpu_supports("avx512f") && __builtin_cpu_supports("avx512bw") && __builtin_cpu_supports("avx512dq") &&
+                __builtin_cpu_supports("avx512vl"))) {
         impl->bfly_fwd = oblas16_afft_bfly_fwd_avx512;
         impl->bfly_inv = oblas16_afft_bfly_inv_avx512;
         impl->align_size = 64;
@@ -610,11 +613,19 @@ void oblas16_afft_init(void)
 #if defined(OBLAS_ARCH_X86)
     if (__builtin_cpu_supports("gfni")) {
         gfni_twiddles = (uint64_t (*)[4])obl_alloc(65536, 32, 64);
+        if (!gfni_twiddles) {
+            afft_impl_initialized = 0;
+            return;
+        }
         for (int i = 0; i < 65536; i++) {
             build_4_matrices_gfni(i, &gfni_twiddles[i][0], &gfni_twiddles[i][1], &gfni_twiddles[i][2], &gfni_twiddles[i][3]);
         }
     } else {
         std_twiddles = (uint8_t (*)[8][16])obl_alloc(65536, 128, 64);
+        if (!std_twiddles) {
+            afft_impl_initialized = 0;
+            return;
+        }
         for (int i = 0; i < 65536; i++) {
             precompute_twist_std(i, std_twiddles[i][0], std_twiddles[i][1], std_twiddles[i][2], std_twiddles[i][3],
                                  std_twiddles[i][4], std_twiddles[i][5], std_twiddles[i][6], std_twiddles[i][7]);
@@ -622,6 +633,10 @@ void oblas16_afft_init(void)
     }
 #elif defined(OBLAS_ARCH_ARM) || (defined(OBLAS_ARCH_RISCV) && defined(__riscv_vector))
     std_twiddles = (uint8_t (*)[8][16])obl_alloc(65536, 128, 64);
+    if (!std_twiddles) {
+        afft_impl_initialized = 0;
+        return;
+    }
     for (int i = 0; i < 65536; i++) {
         for (int j = 0; j < 16; j++) {
             u16 p0 = gf16_mul(i, j);
@@ -640,6 +655,11 @@ void oblas16_afft_init(void)
     }
 #endif
     afft_impl_initialized = 1;
+}
+
+int oblas16_afft_is_initialized(void)
+{
+    return afft_impl_initialized;
 }
 
 static inline void afft_process_block(uint16_t *f, int half, int block_start, int batch, uint16_t twist, struct oblas16_impl *o16,
@@ -784,15 +804,16 @@ static inline void gamma_process_block(uint16_t *arr, int half, int block_start,
     }
 }
 
-uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N, int c_out)
+uint16_t oblas16_afft_compute_gamma_with_scratch(int c, int log_M, int log_K_prime, int log_N, int c_out, uint16_t *arr,
+                                                 size_t arr_len)
 {
     if (log_M == log_N)
         return (c == c_out) ? 1 : 0;
+    if (!arr || arr_len < 32768 || c < 0 || c >= 32768 || c_out < 0 || c_out >= 32768)
+        return 0;
     int log_macro_ifft = log_K_prime - log_M;
     int log_macro_fft = log_N - log_M;
-    uint16_t *arr = (uint16_t *)obl_alloc(1, 32768 * sizeof(uint16_t), 64);
-    if (!arr)
-        return 0;
+    memset(arr, 0, 32768 * sizeof(uint16_t));
     arr[c] = 1;
     for (int k_macro = 0; k_macro < log_macro_ifft; k_macro++) {
         int k = k_macro + log_M;
@@ -812,7 +833,15 @@ uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N
             gamma_process_block(arr, half, b * step, fft_twiddles[k][b], 1);
         }
     }
-    uint16_t ret = arr[c_out];
+    return arr[c_out];
+}
+
+uint16_t oblas16_afft_compute_gamma(int c, int log_M, int log_K_prime, int log_N, int c_out)
+{
+    uint16_t *arr = (uint16_t *)obl_alloc(1, 32768 * sizeof(uint16_t), 64);
+    if (!arr)
+        return 0;
+    uint16_t ret = oblas16_afft_compute_gamma_with_scratch(c, log_M, log_K_prime, log_N, c_out, arr, 32768);
     obl_free(arr);
     return ret;
 }
