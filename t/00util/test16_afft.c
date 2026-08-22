@@ -74,7 +74,13 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
         goto cleanup;
     }
 
-    reed_solomon16_afft_encode(rs, buf, K + N, T);
+    if (reed_solomon16_afft_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon16_afft_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T * sizeof(uint16_t));
 
     int erased = 0;
     while (erased < erasures_count) {
@@ -136,7 +142,13 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
         goto cleanup;
     }
 
-    reed_solomon16_afft_encode(rs, buf, K + N, T);
+    if (reed_solomon16_afft_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon16_afft_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T * sizeof(uint16_t));
 
     for (int i = 0; i < K + N; i++) {
         if ((erasure_mask >> i) & 1) {
@@ -169,6 +181,10 @@ cleanup:
 static void run_api_safety_tests(void)
 {
     printf("[API SAFETY] Running parameter checks...\n");
+    assert(reed_solomon16_afft_new(0, 1) == NULL);
+    assert(reed_solomon16_afft_new(1, 0) == NULL);
+    assert(reed_solomon16_afft_new(32769, 1) == NULL);
+    assert(reed_solomon16_afft_new(32768, 32769) == NULL);
     rs_t *rs4 = reed_solomon16_afft_new(5, 3);
     assert(rs4 != NULL);
     assert(rs4->ds == 5);

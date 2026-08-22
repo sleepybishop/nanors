@@ -74,7 +74,13 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
         goto cleanup;
     }
 
-    reed_solomon16_encode(rs, buf, K + N, T);
+    if (reed_solomon16_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon16_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T * sizeof(uint16_t));
 
     int erased = 0;
     while (erased < erasures_count) {
@@ -136,7 +142,13 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
         goto cleanup;
     }
 
-    reed_solomon16_encode(rs, buf, K + N, T);
+    if (reed_solomon16_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon16_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T * sizeof(uint16_t));
 
     for (int i = 0; i < K + N; i++) {
         if ((erasure_mask >> i) & 1) {
@@ -175,6 +187,8 @@ static void run_api_safety_tests(void)
     assert(rs2 == NULL);
     rs_t *rs3 = reed_solomon16_new(5, 0);
     assert(rs3 == NULL);
+    rs_t *rs_sum = reed_solomon16_new(40000, 40000);
+    assert(rs_sum == NULL);
     rs_t *rs4 = reed_solomon16_new(5, 3);
     assert(rs4 != NULL);
     assert(rs4->ds == 5);

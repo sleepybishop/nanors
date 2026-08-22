@@ -23,10 +23,12 @@ typedef struct _reed_solomon16 {
 } reed_solomon16;
 
 void reed_solomon16_init(void);
+/* data_shards + parity_shards must not exceed the 65536 field elements. */
 reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards);
 void reed_solomon16_release(reed_solomon16 *rs);
 
 int reed_solomon16_encode(reed_solomon16 *rs, uint16_t **shards, int nr_shards, int bs);
+/* Reconstructs every data or parity shard whose corresponding marks entry is nonzero. */
 int reed_solomon16_decode(reed_solomon16 *rs, uint16_t **shards, uint8_t *marks, int nr_shards, int bs);
 
 #ifdef __cplusplus
