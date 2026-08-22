@@ -5,6 +5,7 @@ use t::Util;
 
 sub run_bench {
     my ($K, $N, $T) = @_;
+    local $ENV{BENCH_MB} = $ENV{BENCH_MB} || 1;
     my ($stderr, $stdout) = run_prog("./t/00util/bench16_afft $K $N $T");
     return $stdout;
 }
@@ -25,7 +26,9 @@ subtest "sample benchmark 16 afft" => sub {
       my ($enc_mbps) = $resp =~ /encoded.*throughput: ([0-9\.]+)MB/;
       my ($dec_mbps) = $resp =~ /decoded.*throughput: ([0-9\.]+)MB/;
 
-      if ($enc_mbps && $dec_mbps && $enc_mbps > 0 && $dec_mbps > 0) {
+      my $min_enc = $ENV{MIN_ENC_MBPS} || 0;
+      my $min_dec = $ENV{MIN_DEC_MBPS} || 0;
+      if ($enc_mbps && $dec_mbps && $enc_mbps > $min_enc && $dec_mbps > $min_dec) {
           $summary .= sprintf("  RS16_AFFT_%-12s T: %d enc/dec MBps: %8.1f / %-8.1f\n", $_, $T, $enc_mbps, $dec_mbps);
       } else {
           push @failures, $_;

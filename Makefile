@@ -1,5 +1,7 @@
 OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o rs16.o deps/obl/oblas16.o rs16_afft.o deps/obl/oblas16_afft.o
 
+.PHONY: all check check-vectorization clean indent scan valgrind gperf check-asan
+
 TEST_UTILS=\
 	t/00util/test\
 	t/00util/bench\
@@ -9,7 +11,10 @@ TEST_UTILS=\
 	t/00util/bench16_afft
 
 CFLAGS   = -O3 -g -std=c11 -Wall -I. -Ideps/obl
-CFLAGS  += -march=native -funroll-loops -ftree-vectorize
+CFLAGS  += -funroll-loops -ftree-vectorize -MMD -MP $(NATIVE_CFLAGS)
+
+DEPS=$(OBJ:.o=.d) $(TEST_UTILS:%=%.d)
+-include $(DEPS)
 
 all: $(OBJ)
 
@@ -39,7 +44,9 @@ t/00util/bench16_afft: t/00util/bench16_afft.o $(OBJ)
 
 RUN ?=
 
-check: clean $(TEST_UTILS) check-vectorization
+check: clean
+	$(MAKE) $(TEST_UTILS)
+	$(MAKE) check-vectorization
 	RUN="$(RUN)" prove -I. -v t/*.t
 	$(RUN) ./t/00util/test16
 	$(RUN) ./t/00util/test16_afft
@@ -55,26 +62,30 @@ check-vectorization:
 	fi
 
 clean:
-	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) t/00util/*.o deps/obl/*.o
+	$(RM) *.o *.a $(TEST_UTILS) $(OBJ) $(DEPS) t/00util/*.o deps/obl/*.o
 
 indent:
 	find -name '*.[h,c]' | xargs clang-format -i
 
-scan: 
-	scan-build --status-bugs $(MAKE) clean $(OBJ) $(TEST_UTILS)
+scan: clean
+	scan-build --status-bugs $(MAKE) $(OBJ) $(TEST_UTILS)
 
 valgrind: CFLAGS = -O0 -g -std=c11 -Wall -I. -Ideps/obl
-valgrind: clean $(TEST_UTILS)
+valgrind: clean
+	$(MAKE) CFLAGS="$(CFLAGS)" $(TEST_UTILS)
 	valgrind --error-exitcode=2 ./t/00util/bench 200 20 512
 
 gperf: LDLIBS = -lprofiler -ltcmalloc
-gperf: clean t/00util/bench
+gperf: clean
+	$(MAKE) LDLIBS="$(LDLIBS)" t/00util/bench
 	CPUPROFILE_FREQUENCY=100000000 CPUPROFILE=gperf.prof ./t/00util/bench 200 20 512
 	pprof ./t/00util/bench gperf.prof --callgrind > callgrind.gperf
 	gprof2dot --format=callgrind callgrind.gperf -z main | dot -T svg > gperf.svg
 
 check-asan: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
 check-asan: LDLIBS += -fsanitize=address,undefined
-check-asan: clean $(TEST_UTILS)
+check-asan: clean
+	$(MAKE) CFLAGS="$(CFLAGS)" LDLIBS="$(LDLIBS)" $(TEST_UTILS)
 	RUN="$(RUN)" prove -I. -v t/*.t
 	$(RUN) ./t/00util/test16
+	$(RUN) ./t/00util/test16_afft

@@ -35,7 +35,7 @@ void cleanup(uint8_t **buf, uint8_t **cmp, uint8_t *marks, int K, int N)
     free(marks);
 }
 
-int run(int seed, int K, int N, int T, double *et, double *dt)
+int run(int seed, int K, int N, int T, int iterations, double *et, double *dt)
 {
     if (K <= 0 || N <= 0 || T <= 0) {
         printf("invalid dimensions\n");
@@ -82,39 +82,46 @@ int run(int seed, int K, int N, int T, double *et, double *dt)
         return -1;
     }
 
-    double t0 = now(0);
-    reed_solomon_encode(rs, buf, K + N, T);
-    *et += now(0) - t0;
+    for (int iteration = 0; iteration < iterations; iteration++) {
+        double t0 = now(0);
+        reed_solomon_encode(rs, buf, K + N, T);
+        *et += now(0) - t0;
+        for (int i = K; i < K + N; i++)
+            memcpy(cmp[i], buf[i], (size_t)T);
 
-    for (int i = 0; i < K + N; i++) {
-        marks[i] = 0;
-    }
+        for (int i = 0; i < K + N; i++) {
+            marks[i] = 0;
+        }
 
-    for (int i = 0; i < N; i++) {
-        int at = rand() % (K + N);
-        assert(buf[at] != NULL);
-        memset(buf[at], 0, T);
-        marks[at] = 1;
-    }
+        int erased = 0;
+        while (erased < N) {
+            int at = rand() % (K + N);
+            if (marks[at])
+                continue;
+            assert(buf[at] != NULL);
+            memset(buf[at], 0, T);
+            marks[at] = 1;
+            erased++;
+        }
 
-    t0 = now(0);
-    ret = reed_solomon_reconstruct(rs, buf, marks, K + N, T);
-    *dt += now(0) - t0;
-    reed_solomon_release(rs);
-
-    int failed = 0;
-    for (int i = 0; i < K; i++) {
-        assert(buf[i] != NULL);
-        assert(cmp[i] != NULL);
-        for (int j = 0; j < T; j++) {
-            if (cmp[i][j] != buf[i][j]) {
-                printf("mismatch at row %d col %d\n", i, j);
-                failed = 1;
-                break;
+        t0 = now(0);
+        ret = reed_solomon_reconstruct(rs, buf, marks, K + N, T);
+        *dt += now(0) - t0;
+        int failed = 0;
+        for (int i = 0; i < K; i++) {
+            assert(buf[i] != NULL);
+            assert(cmp[i] != NULL);
+            for (int j = 0; j < T; j++) {
+                if (cmp[i][j] != buf[i][j]) {
+                    printf("mismatch at row %d col %d\n", i, j);
+                    failed = 1;
+                    break;
+                }
             }
         }
+        assert(failed == 0);
     }
-    assert(failed == 0);
+    reed_solomon_release(rs);
 
     cleanup(buf, cmp, marks, K, N);
     return ret;
@@ -136,20 +143,22 @@ int main(int argc, char *argv[])
     printf("===BEGIN===P SEED: %d K: %d N: %d T: %d\n", seed, K, N, T);
 
     int Mb = 128;
+    const char *bench_mb = getenv("BENCH_MB");
+    if (bench_mb && strtol(bench_mb, NULL, 10) > 0)
+        Mb = (int)strtol(bench_mb, NULL, 10);
     int num = Mb * (1024 * 1024) / (K * T);
     double et = 0.0, dt = 0.0;
-    for (int i = 0; i < num; i++) {
-        if (run(seed, K, N, T, &et, &dt) < 0) {
-            printf("run failed\n");
-            return -1;
-        }
+    if (run(seed, K, N, T, num, &et, &dt) < 0) {
+        printf("run failed\n");
+        return -1;
     }
-    printf("data shards = %d, repair shards = %d, encoded %d MB in %1.3f secs, "
+    double processed_mb = (double)num * K * T / (1024.0 * 1024.0);
+    printf("data shards = %d, repair shards = %d, encoded %.1f MB in %1.3f secs, "
            "throughput: %.1fMB/s\n",
-           K, N, Mb, et, Mb / et);
-    printf("data shards = %d, repair shards = %d, decoded %d MB in %1.3f secs, "
+           K, N, processed_mb, et, processed_mb / et);
+    printf("data shards = %d, repair shards = %d, decoded %.1f MB in %1.3f secs, "
            "throughput: %.1fMB/s\n",
-           K, N, Mb, dt, Mb / dt);
+           K, N, processed_mb, dt, processed_mb / dt);
 
     printf("total time: %1.3f|%1.3f|%1.3f\n", now(0) - t0, et, dt);
     return 0;

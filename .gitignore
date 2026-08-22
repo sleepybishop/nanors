@@ -1,5 +1,6 @@
 *.o
 *.a
+*.d
 
 /t/00util/test
 /t/00util/bench

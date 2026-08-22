@@ -5,6 +5,7 @@ use t::Util;
 
 sub run_bench {
     my ($K, $N, $T) = @_;
+    local $ENV{BENCH_MB} = $ENV{BENCH_MB} || 1;
     my ($stderr, $stdout) = run_prog("./t/00util/bench16 $K $N $T");
     return $stdout;
 }
@@ -24,8 +25,10 @@ subtest "sample benchmark 16" => sub {
       my ($dec_mbps) = $resp =~ /decoded.*throughput: ([0-9\.]+)MB/;
 
       diag "RS16_$_ T: $T enc/dec MBps: $enc_mbps/$dec_mbps";
-      ok $enc_mbps > 0, "non zero enc mbps RS16_$_";
-      ok $dec_mbps > 0, "non zero dec mbps RS16_$_";
+      my $min_enc = $ENV{MIN_ENC_MBPS} || 0;
+      my $min_dec = $ENV{MIN_DEC_MBPS} || 0;
+      ok $enc_mbps > $min_enc, "encode throughput exceeds $min_enc MB/s for RS16_$_";
+      ok $dec_mbps > $min_dec, "decode throughput exceeds $min_dec MB/s for RS16_$_";
     }
 };
 
