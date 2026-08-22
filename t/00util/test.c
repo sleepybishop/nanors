@@ -219,7 +219,13 @@ int test_codec_run(int K, int N, int T, int erasures_count, int seed)
         goto cleanup;
     }
 
-    reed_solomon_encode(rs, buf, K + N, T);
+    if (reed_solomon_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T);
 
     // Erase a specific number of shards
     int erased = 0;
@@ -301,7 +307,13 @@ int test_codec_explicit_erasures(int K, int N, int T, uint32_t erasure_mask)
         goto cleanup;
     }
 
-    reed_solomon_encode(rs, buf, K + N, T);
+    if (reed_solomon_encode(rs, buf, K + N, T) != 0) {
+        reed_solomon_release(rs);
+        status = -1;
+        goto cleanup;
+    }
+    for (int i = K; i < K + N; i++)
+        memcpy(cmp[i], buf[i], (size_t)T);
 
     for (int i = 0; i < K + N; i++) {
         if ((erasure_mask >> i) & 1) {
@@ -335,6 +347,10 @@ cleanup:
 static void run_api_safety_tests(void)
 {
     printf("[API SAFETY] Running parameter checks...\n");
+
+    assert(reed_solomon_padded_size(-1) == 0);
+    assert(reed_solomon_aligned_alloc(SIZE_MAX) == NULL);
+    assert(obl_alloc(SIZE_MAX, 2, 64) == NULL);
 
     // ds + ps > 255
     rs_t *rs1 = reed_solomon_new(250, 10);

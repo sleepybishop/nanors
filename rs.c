@@ -157,12 +157,15 @@ void reed_solomon_release(reed_solomon *rs)
 
 int reed_solomon_padded_size(int bs)
 {
-    if (!bs)
+    if (bs <= 0)
         return 0;
     struct oblas_impl impl;
     oblas_get_impl(&impl);
     if (impl.align_size > 1) {
-        return (int)((bs + impl.align_size - 1) & ~(impl.align_size - 1));
+        size_t size = (size_t)bs;
+        if (size > (size_t)INT32_MAX - (impl.align_size - 1))
+            return 0;
+        return (int)((size + impl.align_size - 1) & ~(impl.align_size - 1));
     }
     return bs;
 }
@@ -173,6 +176,8 @@ void *reed_solomon_aligned_alloc(size_t size)
     oblas_get_impl(&impl);
     size_t padded = size;
     if (impl.align_size > 1) {
+        if (size > SIZE_MAX - (impl.align_size - 1))
+            return NULL;
         padded = (size + impl.align_size - 1) & ~(impl.align_size - 1);
     }
     return obl_alloc(1, padded, impl.align_size);
