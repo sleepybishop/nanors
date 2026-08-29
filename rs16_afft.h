@@ -34,6 +34,8 @@ struct afft_workspace {
 
 extern uint16_t LogWalsh[65536];
 void fwht_mod(uint16_t *restrict data, int n);
+/* Build an inverse-normalized Walsh spectrum for the first n evaluation points. */
+int reed_solomon16_afft_build_log_walsh(uint16_t *out, int n);
 
 typedef struct {
     int ds;

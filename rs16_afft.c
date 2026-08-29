@@ -115,6 +115,28 @@ void reed_solomon16_afft_init(void)
     (void)reed_solomon16_afft_init_internal();
 }
 
+int reed_solomon16_afft_build_log_walsh(uint16_t *out, int n)
+{
+    if (!out || n < 2 || n > 65536 || (n & (n - 1)) != 0 || !reed_solomon16_afft_init_internal())
+        return -1;
+
+    out[0] = 0;
+    for (int i = 1; i < n; i++)
+        out[i] = GF16_LOG[omegas[i]];
+    fwht_mod(out, n);
+
+    /* FWHT is self-inverse up to n; fold 1/n into the cached spectrum. */
+    int log_n = log2_int(n);
+    uint32_t inv_n = log_n == 16 ? 1U : 1U << (16 - log_n);
+    for (int i = 0; i < n; i++) {
+        uint32_t x = (uint32_t)out[i] * inv_n;
+        uint32_t s = (x >> 16) + (x & 65535);
+        s = (s >> 16) + (s & 65535);
+        out[i] = (uint16_t)(s >= 65535 ? s - 65535 : s);
+    }
+    return 0;
+}
+
 /* --- public apis: init, new, release, encode and decode --- */
 
 reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards)
