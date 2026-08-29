@@ -15,11 +15,11 @@
 #include "rs16_afft.h"
 #include "rs_rlrs.h"
 
-double now(time_t epoch)
+double now(void)
 {
     struct timespec now;
-    clock_gettime(CLOCK_REALTIME, &now);
-    return ((now.tv_sec - epoch) + now.tv_nsec / 1000000000.0);
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec + now.tv_nsec / 1000000000.0;
 }
 
 void bench_rs(int K, int P, int T, int iterations)
@@ -44,9 +44,9 @@ void bench_rs(int K, int P, int T, int iterations)
 
     double t_enc = 0.0;
     for (int it = 0; it < iterations; it++) {
-        double t0 = now(0);
+        double t0 = now();
         reed_solomon_encode(rs, buf, K + P, T * sizeof(uint16_t));
-        t_enc += now(0) - t0;
+        t_enc += now() - t0;
     }
 
     // Set erasures
@@ -62,9 +62,9 @@ void bench_rs(int K, int P, int T, int iterations)
             memset(buf[i], 0, T * sizeof(uint16_t));
             marks[i] = 1;
         }
-        double t0 = now(0);
+        double t0 = now();
         reed_solomon_decode(rs, buf, marks, K + P, T * sizeof(uint16_t));
-        t_dec += now(0) - t0;
+        t_dec += now() - t0;
     }
 
     reed_solomon_release(rs);
@@ -103,9 +103,9 @@ void bench_rs16_afft(int K, int P, int T, int iterations)
 
     double t_enc = 0.0;
     for (int it = 0; it < iterations; it++) {
-        double t0 = now(0);
+        double t0 = now();
         reed_solomon16_afft_encode(rs, buf, K + P, T);
-        t_enc += now(0) - t0;
+        t_enc += now() - t0;
     }
 
     for (int i = 0; i < P; i++) {
@@ -119,9 +119,9 @@ void bench_rs16_afft(int K, int P, int T, int iterations)
             memset(buf[i], 0, T * sizeof(uint16_t));
             marks[i] = 1;
         }
-        double t0 = now(0);
+        double t0 = now();
         reed_solomon16_afft_decode(rs, buf, marks, K + P, T);
-        t_dec += now(0) - t0;
+        t_dec += now() - t0;
     }
 
     reed_solomon16_afft_release(rs);
@@ -162,11 +162,9 @@ void bench_rlrs(int K, int P, int T, int iterations)
 
     double t_enc = 0.0;
     for (int it = 0; it < iterations; it++) {
-        double t0 = now(0);
-        for (int i = 0; i < P; i++) {
-            reed_solomon_rlrs_encode_block(rs, data_shards, parity_indices[i], parity_shards[i], T);
-        }
-        t_enc += now(0) - t0;
+        double t0 = now();
+        reed_solomon_rlrs_encode_many(rs, data_shards, parity_indices, parity_shards, P, T);
+        t_enc += now() - t0;
     }
 
     // Collect all shards
@@ -187,9 +185,9 @@ void bench_rlrs(int K, int P, int T, int iterations)
             memset(data_shards[i], 0, T * sizeof(uint16_t));
         }
 
-        double t0 = now(0);
+        double t0 = now();
         reed_solomon_rlrs_decode(rs, all_shards, marks, parity_indices, P, T);
-        t_dec += now(0) - t0;
+        t_dec += now() - t0;
     }
 
     reed_solomon_rlrs_release(rs);
@@ -212,6 +210,7 @@ void bench_rlrs(int K, int P, int T, int iterations)
 
 int main(void)
 {
+    printf("RLRS results use warm source-coefficient and erasure-pattern caches.\n");
     printf("=========================================================\n");
     printf("%-10s |    K |    P |   Enc Speed  |   Dec Speed  \n", "Codec");
     printf("=========================================================\n");
@@ -238,7 +237,7 @@ int main(void)
     }
 
     printf("\n=========================================================\n");
-    printf(" LARGE BATCH BENCHMARK (T=1260 payload, Batched 2.5MB/shard)\n");
+    printf(" LARGE BATCH BENCHMARK (~2.5MB total source data)\n");
     printf("=========================================================\n");
     printf("%-10s |    K |    P |   Enc Speed  |   Dec Speed  \n", "Codec");
     printf("=========================================================\n");
