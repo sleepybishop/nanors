@@ -251,7 +251,9 @@ int reed_solomon_rlrs_encode_many(reed_solomon_rlrs *rs, uint16_t **data_shards,
     uint16_t *chunk_buf = ws->chunk_buf;
     uint8_t *needed_buf = ws->needed_buf;
 
-    memset(needed_buf, 0, log_N * (1 << (log_N - 1)) * sizeof(uint8_t));
+    if (log_N > 0) {
+        memset(needed_buf, 0, log_N * (1 << (log_N - 1)) * sizeof(uint8_t));
+    }
 
     uint8_t *needed[16];
     int offset = 0;
@@ -453,7 +455,9 @@ int reed_solomon_rlrs_decode(reed_solomon_rlrs *rs, uint16_t **shards, uint8_t *
     uint16_t *inv_Lp_eval = ws->inv_Lp_eval;
 
     uint8_t *needed_buf = ws->needed_buf;
-    memset(needed_buf, 0, log_N * (1 << (log_N - 1)) * sizeof(uint8_t));
+    if (log_N > 0) {
+        memset(needed_buf, 0, log_N * (1 << (log_N - 1)) * sizeof(uint8_t));
+    }
 
     uint8_t *needed[16];
     int offset = 0;
