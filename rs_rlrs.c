@@ -53,7 +53,6 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     size_t sz_chunk_buf = N * BATCH_SIZE * sizeof(uint16_t);
     size_t sz_needed_buf = log_N * (1 << (log_N - 1)) * sizeof(uint8_t);
     size_t sz_acc = N * BATCH_SIZE * sizeof(uint16_t);
-    size_t sz_tmp_buf = N * BATCH_SIZE * sizeof(uint16_t);
     size_t sz_L_eval = N * sizeof(uint16_t);
     size_t sz_inv_Lp_eval = N * sizeof(uint16_t);
     size_t sz_is_erased = N * sizeof(uint8_t);
@@ -65,7 +64,6 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     sz_chunk_buf = (sz_chunk_buf + 63) & ~63;
     sz_needed_buf = (sz_needed_buf + 63) & ~63;
     sz_acc = (sz_acc + 63) & ~63;
-    sz_tmp_buf = (sz_tmp_buf + 63) & ~63;
     sz_L_eval = (sz_L_eval + 63) & ~63;
     sz_inv_Lp_eval = (sz_inv_Lp_eval + 63) & ~63;
     sz_is_erased = (sz_is_erased + 63) & ~63;
@@ -74,8 +72,8 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     sz_erasures = (sz_erasures + 63) & ~63;
     sz_E = (sz_E + 63) & ~63;
 
-    size_t total_size = sz_chunk_buf + sz_needed_buf + sz_acc + sz_tmp_buf + sz_L_eval + sz_inv_Lp_eval + sz_is_erased +
-                        sz_error_locations + sz_buf + sz_erasures + sz_E;
+    size_t total_size = sz_chunk_buf + sz_needed_buf + sz_acc + sz_L_eval + sz_inv_Lp_eval + sz_is_erased + sz_error_locations +
+                        sz_buf + sz_erasures + sz_E;
 
     rs->flat_alloc = obl_alloc(1, total_size, 64);
     if (!rs->flat_alloc) {
@@ -90,8 +88,6 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     ptr += sz_needed_buf;
     rs->ws.acc = (uint16_t *)ptr;
     ptr += sz_acc;
-    rs->ws.tmp_buf = (uint16_t *)ptr;
-    ptr += sz_tmp_buf;
     rs->ws.L_eval = (uint16_t *)ptr;
     ptr += sz_L_eval;
     rs->ws.inv_Lp_eval = (uint16_t *)ptr;
