@@ -33,13 +33,29 @@ void reed_solomon_rlrs_invalidate_cache(reed_solomon_rlrs *rs);
  * Encode a single parity block by index.
  * @param rs Pointer to the codec instance.
  * @param data_shards Array of K pointers to source data buffers.
- * @param parity_index The index of the parity block (0 to 65535 - K).
+ * @param parity_index The parity block index; K rounded up to a power of two
+ *                     plus parity_index must be less than 65536.
  * @param out_parity Output buffer for the generated parity block.
- * @param block_size Size of the buffers in bytes.
+ * @param block_size Size of each buffer in 16-bit symbols.
  * @return 0 on success, or -1 on error.
  */
 int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards, int parity_index, uint16_t *out_parity,
                                    int block_size);
+
+/*
+ * Encode multiple parity blocks in one transform pass.
+ * This is substantially faster than repeated encode_block calls when several
+ * parity blocks are required for the same source data.
+ * @param rs Pointer to the codec instance.
+ * @param data_shards Array of K pointers to source data buffers.
+ * @param parity_indices Array of parity block indices, with the same range as encode_block.
+ * @param out_parity Array of output buffers, one per parity index.
+ * @param parity_count Number of parity blocks to generate.
+ * @param block_size Size of each buffer in 16-bit symbols.
+ * @return 0 on success, or -1 on error.
+ */
+int reed_solomon_rlrs_encode_many(reed_solomon_rlrs *rs, uint16_t **data_shards, const int *parity_indices, uint16_t **out_parity,
+                                  int parity_count, int block_size);
 
 /*
  * Decode the erased data/parity shards.
@@ -48,7 +64,7 @@ int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards
  * @param marks Boolean array of size K + received_parity_count. 1 if shard is missing/erased, 0 otherwise.
  * @param received_parity_indices Array containing the index of each received parity block (relative to 0).
  * @param received_parity_count Number of parity shards provided. Must be >= the number of erasures.
- * @param block_size Size of the buffers in bytes.
+ * @param block_size Size of each buffer in 16-bit symbols.
  * @return 0 on success, or -1 on error.
  */
 int reed_solomon_rlrs_decode(reed_solomon_rlrs *rs, uint16_t **shards, uint8_t *marks, int *received_parity_indices,

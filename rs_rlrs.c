@@ -11,14 +11,24 @@ struct reed_solomon_rlrs {
     int log_K_prime;
     int cached_N;
     void *flat_alloc;
+    uint16_t *log_walsh;
     struct afft_workspace ws;
 
     /* Cache management */
     uint16_t **cached_shards;
     int cached_block_size;
     uint16_t *coeff_buf;
-    int coeff_buf_size;
+    size_t coeff_buf_size;
     int has_cache;
+
+    /* Erasure locator cache for repeated packet-loss patterns. */
+    uint8_t *cached_decode_marks;
+    size_t cached_decode_marks_size;
+    int *cached_decode_parity_indices;
+    int cached_decode_parity_capacity;
+    int cached_decode_parity_count;
+    int cached_decode_N;
+    int has_decode_cache;
 };
 
 static int next_power_of_2(int n)
@@ -50,30 +60,23 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     int log_N = log2_int(N);
     if (log_N < 1)
         log_N = 1;
-    size_t sz_chunk_buf = N * BATCH_SIZE * sizeof(uint16_t);
+    size_t sz_work_buf = (size_t)N * BATCH_SIZE * sizeof(uint16_t);
     size_t sz_needed_buf = log_N * (1 << (log_N - 1)) * sizeof(uint8_t);
-    size_t sz_acc = N * BATCH_SIZE * sizeof(uint16_t);
     size_t sz_L_eval = N * sizeof(uint16_t);
     size_t sz_inv_Lp_eval = N * sizeof(uint16_t);
     size_t sz_is_erased = N * sizeof(uint8_t);
-    size_t sz_error_locations = 65536 * sizeof(uint16_t);
-    size_t sz_buf = N * BATCH_SIZE * sizeof(uint16_t);
-    size_t sz_erasures = 65536 * sizeof(int);
-    size_t sz_E = 65536 * sizeof(int);
+    size_t sz_error_locations = N * sizeof(uint16_t);
+    size_t sz_log_walsh = N * sizeof(uint16_t);
 
-    sz_chunk_buf = (sz_chunk_buf + 63) & ~63;
+    sz_work_buf = (sz_work_buf + 63) & ~63;
     sz_needed_buf = (sz_needed_buf + 63) & ~63;
-    sz_acc = (sz_acc + 63) & ~63;
     sz_L_eval = (sz_L_eval + 63) & ~63;
     sz_inv_Lp_eval = (sz_inv_Lp_eval + 63) & ~63;
     sz_is_erased = (sz_is_erased + 63) & ~63;
     sz_error_locations = (sz_error_locations + 63) & ~63;
-    sz_buf = (sz_buf + 63) & ~63;
-    sz_erasures = (sz_erasures + 63) & ~63;
-    sz_E = (sz_E + 63) & ~63;
+    sz_log_walsh = (sz_log_walsh + 63) & ~63;
 
-    size_t total_size = sz_chunk_buf + sz_needed_buf + sz_acc + sz_L_eval + sz_inv_Lp_eval + sz_is_erased + sz_error_locations +
-                        sz_buf + sz_erasures + sz_E;
+    size_t total_size = sz_work_buf + sz_needed_buf + sz_L_eval + sz_inv_Lp_eval + sz_is_erased + sz_error_locations + sz_log_walsh;
 
     rs->flat_alloc = obl_alloc(1, total_size, 64);
     if (!rs->flat_alloc) {
@@ -83,11 +86,11 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
 
     uint8_t *ptr = (uint8_t *)rs->flat_alloc;
     rs->ws.chunk_buf = (uint16_t *)ptr;
-    ptr += sz_chunk_buf;
+    rs->ws.buf = rs->ws.chunk_buf;
+    rs->ws.acc = NULL;
+    ptr += sz_work_buf;
     rs->ws.needed_buf = ptr;
     ptr += sz_needed_buf;
-    rs->ws.acc = (uint16_t *)ptr;
-    ptr += sz_acc;
     rs->ws.L_eval = (uint16_t *)ptr;
     ptr += sz_L_eval;
     rs->ws.inv_Lp_eval = (uint16_t *)ptr;
@@ -96,13 +99,19 @@ static int rlrs_ensure_workspace(reed_solomon_rlrs *rs, int N)
     ptr += sz_is_erased;
     rs->ws.error_locations = (uint16_t *)ptr;
     ptr += sz_error_locations;
-    rs->ws.buf = (uint16_t *)ptr;
-    ptr += sz_buf;
-    rs->ws.erasures = (int *)ptr;
-    ptr += sz_erasures;
-    rs->ws.E = (int *)ptr;
+    rs->log_walsh = (uint16_t *)ptr;
+    rs->ws.erasures = NULL;
+    rs->ws.E = NULL;
+
+    if (reed_solomon16_afft_build_log_walsh(rs->log_walsh, N) < 0) {
+        obl_free(rs->flat_alloc);
+        rs->flat_alloc = NULL;
+        rs->cached_N = 0;
+        return -1;
+    }
 
     rs->cached_N = N;
+    rs->has_decode_cache = 0;
     return 0;
 }
 
@@ -117,6 +126,41 @@ static int rlrs_cache_matches(reed_solomon_rlrs *rs, uint16_t **data_shards, int
     return 1;
 }
 
+static int rlrs_decode_cache_matches(reed_solomon_rlrs *rs, const uint8_t *marks, const int *parity_indices, int parity_count,
+                                     int N)
+{
+    size_t marks_size = (size_t)rs->ds + parity_count;
+    return rs->has_decode_cache && rs->cached_decode_N == N && rs->cached_decode_parity_count == parity_count &&
+           memcmp(rs->cached_decode_marks, marks, marks_size) == 0 &&
+           memcmp(rs->cached_decode_parity_indices, parity_indices, (size_t)parity_count * sizeof(int)) == 0;
+}
+
+static void rlrs_update_decode_cache(reed_solomon_rlrs *rs, const uint8_t *marks, const int *parity_indices, int parity_count,
+                                     int N)
+{
+    size_t marks_size = (size_t)rs->ds + parity_count;
+    if (marks_size > rs->cached_decode_marks_size) {
+        uint8_t *new_marks = (uint8_t *)realloc(rs->cached_decode_marks, marks_size);
+        if (!new_marks)
+            return;
+        rs->cached_decode_marks = new_marks;
+        rs->cached_decode_marks_size = marks_size;
+    }
+    if (parity_count > rs->cached_decode_parity_capacity) {
+        int *new_indices = (int *)realloc(rs->cached_decode_parity_indices, (size_t)parity_count * sizeof(int));
+        if (!new_indices)
+            return;
+        rs->cached_decode_parity_indices = new_indices;
+        rs->cached_decode_parity_capacity = parity_count;
+    }
+
+    memcpy(rs->cached_decode_marks, marks, marks_size);
+    memcpy(rs->cached_decode_parity_indices, parity_indices, (size_t)parity_count * sizeof(int));
+    rs->cached_decode_parity_count = parity_count;
+    rs->cached_decode_N = N;
+    rs->has_decode_cache = 1;
+}
+
 void reed_solomon_rlrs_invalidate_cache(reed_solomon_rlrs *rs)
 {
     if (rs) {
@@ -129,6 +173,10 @@ reed_solomon_rlrs *reed_solomon_rlrs_new(int data_shards)
     if (data_shards <= 0 || data_shards > RS16_DATA_SHARDS_MAX)
         return NULL;
 
+    int K_prime = next_power_of_2(data_shards);
+    if (K_prime >= 65536)
+        return NULL;
+
     reed_solomon16_afft_init();
 
     reed_solomon_rlrs *rs = (reed_solomon_rlrs *)calloc(1, sizeof(reed_solomon_rlrs));
@@ -136,7 +184,7 @@ reed_solomon_rlrs *reed_solomon_rlrs_new(int data_shards)
         return NULL;
 
     rs->ds = data_shards;
-    rs->K_prime = next_power_of_2(data_shards);
+    rs->K_prime = K_prime;
     rs->log_K_prime = log2_int(rs->K_prime);
     rs->cached_N = 0;
     rs->flat_alloc = NULL;
@@ -167,19 +215,29 @@ void reed_solomon_rlrs_release(reed_solomon_rlrs *rs)
         if (rs->coeff_buf) {
             free(rs->coeff_buf);
         }
+        free(rs->cached_decode_marks);
+        free(rs->cached_decode_parity_indices);
         free(rs);
     }
 }
 
-int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards, int parity_index, uint16_t *out_parity,
-                                   int block_size)
+int reed_solomon_rlrs_encode_many(reed_solomon_rlrs *rs, uint16_t **data_shards, const int *parity_indices, uint16_t **out_parity,
+                                  int parity_count, int block_size)
 {
-    if (!rs || !data_shards || parity_index < 0 || parity_index >= 65536 - rs->ds || !out_parity || block_size <= 0)
+    if (!rs || !data_shards || !parity_indices || !out_parity || parity_count <= 0 || block_size <= 0)
         return -1;
 
     int K = rs->ds;
     int K_prime = rs->K_prime;
-    int N = next_power_of_2(K_prime + parity_index + 1);
+    int max_parity_index = -1;
+    for (int i = 0; i < parity_count; i++) {
+        if (parity_indices[i] < 0 || parity_indices[i] >= 65536 - K_prime || !out_parity[i])
+            return -1;
+        if (parity_indices[i] > max_parity_index)
+            max_parity_index = parity_indices[i];
+    }
+
+    int N = next_power_of_2(K_prime + max_parity_index + 1);
     if (N > 65536)
         return -1;
 
@@ -202,15 +260,17 @@ int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards
         offset += 1 << (log_N - 1 - k);
     }
 
-    int idx = K_prime + parity_index;
-    for (int k = 0; k < log_N; k++) {
-        needed[k][idx >> (k + 1)] = 1;
+    for (int i = 0; i < parity_count; i++) {
+        int idx = K_prime + parity_indices[i];
+        for (int k = 0; k < log_N; k++) {
+            needed[k][idx >> (k + 1)] = 1;
+        }
     }
 
     /* Check if cache matches */
     int cache_hit = rlrs_cache_matches(rs, data_shards, block_size);
     if (!cache_hit) {
-        int required_coeff_size = K_prime * block_size;
+        size_t required_coeff_size = (size_t)K_prime * block_size;
         if (required_coeff_size > rs->coeff_buf_size) {
             uint16_t *new_buf = (uint16_t *)realloc(rs->coeff_buf, required_coeff_size * sizeof(uint16_t));
             if (!new_buf)
@@ -231,8 +291,13 @@ int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards
 
         if (cache_hit) {
             /* Restore precomputed IFFT coefficients directly into chunk_buf */
-            for (int i = 0; i < K_prime; i++) {
-                memcpy(&chunk_buf[i * BATCH_SIZE], &rs->coeff_buf[i * block_size + start], current_chunk * sizeof(uint16_t));
+            if (current_chunk == BATCH_SIZE) {
+                memcpy(chunk_buf, &rs->coeff_buf[(size_t)start * K_prime], (size_t)K_prime * BATCH_SIZE * sizeof(uint16_t));
+            } else {
+                for (int i = 0; i < K_prime; i++) {
+                    memcpy(&chunk_buf[i * BATCH_SIZE], &rs->coeff_buf[(size_t)start * K_prime + i * current_chunk],
+                           current_chunk * sizeof(uint16_t));
+                }
             }
         } else {
             /* Copy data shards and run IFFT */
@@ -243,15 +308,23 @@ int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards
             oblas16_afft_ifft(chunk_buf, log_K_prime, BATCH_SIZE, K, 0, &ws->o16, &ws->afft);
 
             /* Save computed IFFT coefficients to cache */
-            for (int i = 0; i < K_prime; i++) {
-                memcpy(&rs->coeff_buf[i * block_size + start], &chunk_buf[i * BATCH_SIZE], current_chunk * sizeof(uint16_t));
+            if (current_chunk == BATCH_SIZE) {
+                memcpy(&rs->coeff_buf[(size_t)start * K_prime], chunk_buf, (size_t)K_prime * BATCH_SIZE * sizeof(uint16_t));
+            } else {
+                for (int i = 0; i < K_prime; i++) {
+                    memcpy(&rs->coeff_buf[(size_t)start * K_prime + i * current_chunk], &chunk_buf[i * BATCH_SIZE],
+                           current_chunk * sizeof(uint16_t));
+                }
             }
         }
 
-        /* Apply FFT to evaluate the polynomial at the target parity block */
+        /* Apply one partial FFT for the union of all requested parity blocks. */
         oblas16_afft_fft(chunk_buf, log_N, BATCH_SIZE, needed, 0, &ws->o16, &ws->afft);
 
-        memcpy(&out_parity[start], &chunk_buf[idx * BATCH_SIZE], current_chunk * sizeof(uint16_t));
+        for (int i = 0; i < parity_count; i++) {
+            int idx = K_prime + parity_indices[i];
+            memcpy(&out_parity[i][start], &chunk_buf[idx * BATCH_SIZE], current_chunk * sizeof(uint16_t));
+        }
     }
 
     if (!cache_hit) {
@@ -259,6 +332,14 @@ int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards
     }
 
     return 0;
+}
+
+int reed_solomon_rlrs_encode_block(reed_solomon_rlrs *rs, uint16_t **data_shards, int parity_index, uint16_t *out_parity,
+                                   int block_size)
+{
+    int parity_indices[1] = {parity_index};
+    uint16_t *out_parities[1] = {out_parity};
+    return reed_solomon_rlrs_encode_many(rs, data_shards, parity_indices, out_parities, 1, block_size);
 }
 
 int reed_solomon_rlrs_decode(reed_solomon_rlrs *rs, uint16_t **shards, uint8_t *marks, int *received_parity_indices,
@@ -269,6 +350,11 @@ int reed_solomon_rlrs_decode(reed_solomon_rlrs *rs, uint16_t **shards, uint8_t *
 
     int K = rs->ds;
     int K_prime = rs->K_prime;
+
+    for (int i = 0; i < received_parity_count; i++) {
+        if (received_parity_indices[i] < 0 || received_parity_indices[i] >= 65536 - K_prime)
+            return -1;
+    }
 
     int num_erasures = 0;
     int erasures[RS16_DATA_SHARDS_MAX];
@@ -309,58 +395,62 @@ int reed_solomon_rlrs_decode(reed_solomon_rlrs *rs, uint16_t **shards, uint8_t *
 
     struct afft_workspace *ws = &rs->ws;
 
-    uint8_t *is_erased = ws->is_erased;
-    memset(is_erased, 1, N * sizeof(uint8_t));
+    if (!rlrs_decode_cache_matches(rs, marks, received_parity_indices, received_parity_count, N)) {
+        uint8_t *is_erased = ws->is_erased;
+        memset(is_erased, 1, N * sizeof(uint8_t));
 
-    for (int i = 0; i < K; i++) {
-        if (!marks[i]) {
-            is_erased[i] = 0;
-        }
-    }
-    for (int i = K; i < K_prime; i++) {
-        is_erased[i] = 0;
-    }
-    for (int i = 0; i < received_parity_count; i++) {
-        if (!marks[K + i]) {
-            int idx = K_prime + received_parity_indices[i];
-            if (idx < N) {
-                is_erased[idx] = 0;
+        for (int i = 0; i < K; i++) {
+            if (!marks[i]) {
+                is_erased[i] = 0;
             }
         }
-    }
-
-    int *E = ws->E;
-    int num_E = 0;
-    uint16_t *error_locations = ws->error_locations;
-    memset(error_locations, 0, 65536 * sizeof(uint16_t));
-
-    for (int i = 0; i < N; i++) {
-        if (is_erased[i]) {
-            E[num_E++] = i;
-            error_locations[i] = 1;
+        for (int i = K; i < K_prime; i++) {
+            is_erased[i] = 0;
         }
+        for (int i = 0; i < received_parity_count; i++) {
+            if (!marks[K + i]) {
+                int idx = K_prime + received_parity_indices[i];
+                if (idx < N) {
+                    is_erased[idx] = 0;
+                }
+            }
+        }
+
+        uint16_t *error_locations = ws->error_locations;
+        memset(error_locations, 0, N * sizeof(uint16_t));
+
+        for (int i = 0; i < N; i++) {
+            if (is_erased[i]) {
+                error_locations[i] = 1;
+            }
+        }
+
+        fwht_mod(error_locations, N);
+
+        for (int i = 0; i < N; i++) {
+            uint32_t x = (uint32_t)error_locations[i] * rs->log_walsh[i];
+            uint32_t s = (x >> 16) + (x & 65535);
+            s = (s >> 16) + (s & 65535);
+            error_locations[i] = (s >= 65535) ? s - 65535 : s;
+        }
+
+        fwht_mod(error_locations, N);
+
+        uint16_t *L_eval = ws->L_eval;
+        uint16_t *inv_Lp_eval = ws->inv_Lp_eval;
+        for (int i = 0; i < N; i++) {
+            if (!is_erased[i]) {
+                L_eval[i] = GF16_EXP[error_locations[i]];
+            } else {
+                inv_Lp_eval[i] = GF16_EXP[65535 - error_locations[i]];
+            }
+        }
+
+        rlrs_update_decode_cache(rs, marks, received_parity_indices, received_parity_count, N);
     }
-
-    fwht_mod(error_locations, 65536);
-
-    for (int i = 0; i < 65536; i++) {
-        uint32_t x = (uint32_t)error_locations[i] * LogWalsh[i];
-        uint32_t s = (x >> 16) + (x & 65535);
-        s = (s >> 16) + (s & 65535);
-        error_locations[i] = (s >= 65535) ? s - 65535 : s;
-    }
-
-    fwht_mod(error_locations, 65536);
 
     uint16_t *L_eval = ws->L_eval;
     uint16_t *inv_Lp_eval = ws->inv_Lp_eval;
-    for (int i = 0; i < N; i++) {
-        if (!is_erased[i]) {
-            L_eval[i] = GF16_EXP[error_locations[i]];
-        } else {
-            inv_Lp_eval[i] = GF16_EXP[65535 - error_locations[i]];
-        }
-    }
 
     uint8_t *needed_buf = ws->needed_buf;
     memset(needed_buf, 0, log_N * (1 << (log_N - 1)) * sizeof(uint8_t));
