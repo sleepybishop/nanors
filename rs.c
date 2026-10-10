@@ -92,6 +92,8 @@ static int invert_mat(reed_solomon *rs, u8 *src, u8 *wrk, u8 **dst, int V0, int 
 
 void reed_solomon_init(void)
 {
+    struct oblas_impl impl;
+    oblas_get_impl(&impl);
 }
 
 reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps)

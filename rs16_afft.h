@@ -42,14 +42,17 @@ typedef struct {
     void *p;
 } reed_solomon16_afft;
 
+/* Initialize on one thread before concurrent use. Verify allocation succeeded
+ * by creating a codec successfully before starting worker threads. */
 void reed_solomon16_afft_init(void);
 /* next_power_of_two(data_shards) + parity_shards must not exceed 65536. */
 reed_solomon16_afft *reed_solomon16_afft_new(int data_shards, int parity_shards);
 void reed_solomon16_afft_release(reed_solomon16_afft *rs);
 
-/* Encode and decode operations on one codec instance are serialized internally. */
+/* Operations on the same codec require external synchronization. */
 int reed_solomon16_afft_encode(reed_solomon16_afft *rs, uint16_t **shards, int nr_shards, int bs);
-/* Reconstructs every data or parity shard whose corresponding marks entry is nonzero. */
+/* Reconstructs marked data shards only; parity shards are left unchanged.
+ * Missing data shards must have writable buffers, not NULL pointers. */
 int reed_solomon16_afft_decode(reed_solomon16_afft *rs, uint16_t **shards, uint8_t *marks, int nr_shards, int bs);
 
 #ifdef __cplusplus

@@ -445,6 +445,50 @@ static void run_mds_property_tests(void)
     printf("[MDS PROPERTY] OK\n");
 }
 
+static void run_compatibility_tests(void)
+{
+    /* Fixed GF(256), polynomial 0x11d vectors, calculated independently of
+     * nanors: first the Cauchy matrix, then GameStream's 4+2 audio matrix. */
+    static const uint8_t parity[2][2][17] = {
+        {{0xc9, 0xfd, 0xac, 0x80, 0x19, 0xb7, 0x43, 0x36, 0xc3, 0x82, 0x45, 0x07, 0x72, 0x31, 0xf7, 0xc9, 0xe9},
+         {0xa5, 0x15, 0x31, 0x2e, 0x80, 0x5b, 0xa5, 0xff, 0xd8, 0x17, 0xeb, 0x75, 0x9e, 0x00, 0x98, 0xa5, 0x8f}},
+        {{0x27, 0x22, 0x0b, 0x8a, 0xe6, 0x2a, 0x88, 0x62, 0x89, 0xe6, 0x55, 0x1b, 0xf5, 0x47, 0x1a, 0x27, 0x5d},
+         {0x78, 0x8a, 0xe3, 0x7d, 0xd5, 0xf7, 0x09, 0x36, 0xee, 0x42, 0xbb, 0x18, 0x31, 0xf5, 0x20, 0x78, 0x36}}};
+    static const uint8_t audio[] = {0x77, 0x40, 0x38, 0x0e, 0xc7, 0xa7, 0x0d, 0x6c};
+    for (int matrix = 0; matrix < 2; matrix++) {
+        rs_t *rs = reed_solomon_new(4, 2);
+        assert(rs);
+        if (matrix)
+            memcpy(rs->p, audio, sizeof(audio));
+        uint8_t storage[6][19], *shards[6];
+        memset(storage, 0xa5, sizeof(storage));
+        for (int i = 0; i < 6; i++) {
+            shards[i] = storage[i] + 1; /* Unaligned payloads with canaries. */
+            if (i < 4)
+                for (int j = 0; j < 17; j++)
+                    shards[i][j] = (i * 29 + j * 17 + (j >> 3)) & 255;
+        }
+        assert(reed_solomon_encode(rs, shards, 6, 17) == 0);
+        assert(memcmp(shards[4], parity[matrix][0], 17) == 0);
+        assert(memcmp(shards[5], parity[matrix][1], 17) == 0);
+
+        uint8_t marks[] = {1, 0, 0, 0, 0, 1};
+        memset(shards[0], 0, 17);
+        memset(shards[5], 0, 17);
+        assert(reed_solomon_decode(rs, shards, marks, 6, 17) == 0);
+        for (int i = 0; i < 4; i++)
+            for (int j = 0; j < 17; j++)
+                assert(shards[i][j] == ((i * 29 + j * 17 + (j >> 3)) & 255));
+        for (int j = 0; j < 17; j++)
+            assert(shards[5][j] == 0); /* Missing parity is not regenerated. */
+        for (int i = 0; i < 6; i++) {
+            assert(storage[i][0] == 0xa5);
+            assert(storage[i][18] == 0xa5);
+        }
+        reed_solomon_release(rs);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     for (int i = 0; i < 256; i++) {
@@ -470,6 +514,7 @@ int main(int argc, char *argv[])
 
     /* Execute structured unit tests */
     run_api_safety_tests();
+    run_compatibility_tests();
     run_decoder_failure_tests();
     run_bounds_and_alignment_tests();
     run_mds_property_tests();

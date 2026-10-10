@@ -22,6 +22,7 @@ typedef struct _reed_solomon16 {
     uint16_t *p;
 } reed_solomon16;
 
+/* Call on one thread before concurrent use to initialize shared tables. */
 void reed_solomon16_init(void);
 /* data_shards + parity_shards must not exceed the 65536 field elements. */
 reed_solomon16 *reed_solomon16_new(int data_shards, int parity_shards);

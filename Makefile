@@ -4,6 +4,7 @@ OBJ=rs.o deps/obl/oblas_common.o deps/obl/oblas_lite.o rs16.o deps/obl/oblas16.o
 
 TEST_UTILS=\
 	t/00util/test\
+	t/00util/test_dispatch\
 	t/00util/bench\
 	t/00util/test16\
 	t/00util/test16_afft\
@@ -32,6 +33,8 @@ t/00util/bench16_afft.o: CPPFLAGS+=-D_DEFAULT_SOURCE
 
 t/00util/test: t/00util/test.o $(OBJ)
 
+t/00util/test_dispatch: t/00util/test_dispatch.o deps/obl/oblas_common.o
+
 t/00util/bench: t/00util/bench.o $(OBJ)
 
 t/00util/test16: t/00util/test16.o $(OBJ)
@@ -48,6 +51,7 @@ check: clean
 	$(MAKE) $(TEST_UTILS)
 	$(MAKE) check-vectorization
 	RUN="$(RUN)" prove -I. -v t/*.t
+	$(RUN) ./t/00util/test_dispatch
 	$(RUN) ./t/00util/test16
 	$(RUN) ./t/00util/test16_afft
 
@@ -87,5 +91,6 @@ check-asan: LDLIBS += -fsanitize=address,undefined
 check-asan: clean
 	$(MAKE) CFLAGS="$(CFLAGS)" LDLIBS="$(LDLIBS)" $(TEST_UTILS)
 	RUN="$(RUN)" prove -I. -v t/*.t
+	$(RUN) ./t/00util/test_dispatch
 	$(RUN) ./t/00util/test16
 	$(RUN) ./t/00util/test16_afft

@@ -26,14 +26,17 @@ typedef struct _reed_solomon {
 #define reed_solomon_bufsize(ds, ps) (sizeof(reed_solomon) + (ps) * (ds) + (ds) * (ds))
 #define reed_solomon_reconstruct reed_solomon_decode
 
+/* Call on one thread before concurrent library use to initialize shared tables.
+ * Single-threaded callers may rely on automatic initialization. */
 void reed_solomon_init(void);
 reed_solomon *reed_solomon_new_static(void *buf, size_t len, int ds, int ps);
 reed_solomon *reed_solomon_new(int data_shards, int parity_shards);
 void reed_solomon_release(reed_solomon *rs);
 
-/* Encode and decode operations on one codec instance are serialized internally. */
+/* Operations on the same codec require external synchronization. */
 int reed_solomon_encode(reed_solomon *rs, uint8_t **shards, int nr_shards, int bs);
-/* Reconstructs every data or parity shard whose corresponding marks entry is nonzero. */
+/* Reconstructs marked data shards only; parity shards are left unchanged.
+ * Missing data shards must have writable buffers, not NULL pointers. */
 int reed_solomon_decode(reed_solomon *rs, uint8_t **shards, uint8_t *marks, int nr_shards, int bs);
 
 /*
